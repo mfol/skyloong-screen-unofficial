@@ -712,7 +712,9 @@ async function handleVideo(file){
     stat('Convertendo "'+file.name+'"…');
     const buf=new Uint8Array(await file.arrayBuffer());
     await ff.writeFile('input', buf);
-    await ff.exec(['-i','input','-vf','scale=w=320:h=240:force_original_aspect_ratio=decrease,fps=23.98',
+    // cover: escala até cobrir 320×240 (increase) e corta o excesso centralizado (crop).
+    // Gera SEMPRE um quadro 320×240 exato -> o teclado não estica/deforma fontes não-4:3.
+    await ff.exec(['-i','input','-vf','fps=23.98,scale=320:240:force_original_aspect_ratio=increase,crop=320:240',
       '-c:v','mpeg1video','-b:v','500k','-maxrate','800k','-an','-f','mpeg','out.mpeg']);
     const out=await ff.readFile('out.mpeg');
     const blob=new Blob([out],{type:'video/mpeg'});

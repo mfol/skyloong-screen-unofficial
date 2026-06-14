@@ -119,7 +119,7 @@ This is done **directly on the keyboard's little screen**, no PC required:
 |---|---|
 | **Dashboard** | Device state (IP, SSID, timezone, language), status of each widget, a **memory-usage bar**, and a preview (with nickname) of the active image. |
 | **Images** | Upload with **automatic rescale to 320×240 JPEG** (_cover_ crop, centered); gallery with **thumbnail + editable nickname** per file; toggle **Fixed image ↔ Slideshow**; adjust the **interval** (2–12 s); enable/disable; set which image shows on the screen; delete. |
-| **Video / GIF** | Upload a video (mp4/webm/mkv/avi) **or GIF**, **converted in the browser itself** (ffmpeg.wasm) to the screen's format (**MPEG‑1 320×240**, resized to fit). The generated size is **validated against free memory** before upload. Gallery with **thumbnail (1st frame) + nickname**; removal; enable/disable the video app. |
+| **Video / GIF** | Upload a video (mp4/webm/mkv/avi) **or GIF**, **converted in the browser itself** (ffmpeg.wasm) to the screen's format (**MPEG‑1 320×240**, _cover_: scaled to fill and **center-cropped**, so non‑4:3 sources don't get stretched). The generated size is **validated against free memory** before upload. Gallery with **thumbnail (1st frame) + nickname**; removal; enable/disable the video app. |
 | **Screen Apps** | Toggles for the widgets shown on the keyboard: **Weather**, **APS** (typing speed), **System info** (CPU/RAM), **Video/GIF** and **Slideshow**. |
 | **WiFi** | Scans nearby networks (with **signal strength**) and sends new credentials to the keyboard. |
 | **Settings** | **Theme** (0/1/2), **timezone**, **city** + **weather API key**, and **custom text** shown on the screen. |

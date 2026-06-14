@@ -118,7 +118,7 @@ Wi‑Fi**. Isso é feito **direto na telinha do teclado**, sem PC:
 |---|---|
 | **Dashboard** | Estado do dispositivo (IP, SSID, fuso, idioma), status de cada widget, **barra de uso de memória** e prévia (com apelido) da imagem ativa. |
 | **Imagens** | Upload com **reescala automática para 320×240 JPEG** (corte _cover_, centralizado); galeria com **miniatura + apelido editável** por arquivo; alternar **Imagem fixa ↔ Slideshow**; ajustar o **intervalo** (2–12 s); ligar/desligar; definir qual imagem aparece na tela; apagar. |
-| **Vídeo / GIF** | Upload de vídeo (mp4/webm/mkv/avi) **ou GIF**, **convertido no próprio navegador** (ffmpeg.wasm) para o formato da tela (**MPEG‑1 320×240**, redimensionado p/ caber). O tamanho gerado é **validado contra a memória livre** antes do envio. Galeria com **miniatura (1º quadro) + apelido**; remoção; liga/desliga o app de vídeo. |
+| **Vídeo / GIF** | Upload de vídeo (mp4/webm/mkv/avi) **ou GIF**, **convertido no próprio navegador** (ffmpeg.wasm) para o formato da tela (**MPEG‑1 320×240**, _cover_: escala até preencher e **corta** o excesso centralizado, então fontes não‑4:3 não esticam). O tamanho gerado é **validado contra a memória livre** antes do envio. Galeria com **miniatura (1º quadro) + apelido**; remoção; liga/desliga o app de vídeo. |
 | **Apps da Tela** | Toggles dos widgets exibidos no teclado: **Clima**, **APS** (velocidade de digitação), **Info do sistema** (CPU/RAM), **Vídeo/GIF** e **Slideshow**. |
 | **WiFi** | Escaneia redes próximas (com **força de sinal**) e envia novas credenciais para o teclado. |
 | **Configurações** | **Tema** (0/1/2), **fuso horário**, **cidade** + **chave da API de clima** e **texto personalizado** exibido na tela. |
