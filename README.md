@@ -47,11 +47,24 @@ Características relevantes do servidor embarcado:
 
 1. Garanta que seu PC está na **mesma rede Wi‑Fi** que o teclado.
 2. Descubra o IP do teclado (aparece na própria tela / no roteador). Padrão deste projeto: `192.168.100.11`.
-3. Abra **`skyloong-ui.html`** com **duplo clique** (abre via `file://`) — ou sirva por `http://`.
-4. No topo da página, ajuste o **IP** se necessário e clique em **Conectar**.
+3. **Sirva a página por `http://`** (recomendado) — dê **duplo clique em `serve.bat`**.
+   Ele sobe um servidor local e abre `http://localhost:8000/skyloong-ui.html` no navegador.
+   Alternativa manual, na pasta do projeto:
+   ```bash
+   python -m http.server 8000
+   # depois abra http://localhost:8000/skyloong-ui.html
+   ```
+4. No topo da página, ajuste o **IP** do teclado se necessário e clique em **Conectar**.
 
-> **Não** abra a página por `https://`. O teclado é `http://` e o navegador bloquearia as
-> requisições por "conteúdo misto" (mixed content). Use `file://` ou `http://`.
+> ### Por que não abrir o arquivo direto (`file://`)?
+> Abrindo por `file://` a página tem origem "nula/opaca", e o navegador **bloqueia** a
+> criação de Web Workers e o `import()` de módulos cross‑origin — é o que quebra a
+> **conversão de vídeo** (erro do worker). Servindo por `http://` a página ganha uma origem
+> real e tudo funciona. O Dashboard e a maioria das ações até funcionam via `file://`,
+> mas a conversão de vídeo **não** — por isso prefira `serve.bat`.
+>
+> **Nunca** use `https://`: o teclado é `http://` e o navegador bloquearia por
+> "conteúdo misto" (mixed content). Use `http://` (localhost) ou, no limite, `file://`.
 
 O endereço informado fica salvo no `localStorage` para as próximas aberturas.
 
@@ -85,10 +98,14 @@ Ocorria ao carregar o motor de conversão de vídeo (ffmpeg.wasm). O `new Worker
 para uma URL do CDN que **redireciona** para outra origem, e o navegador **recusa redirect
 cross-origin em script de worker**.
 
-**Corrigido:** o worker do ffmpeg agora é sempre carregado como **`blob:`** — o `fetch()`
+**Corrigido (parte 1):** o worker do ffmpeg agora é sempre carregado como **`blob:`** — o `fetch()`
 segue o redirect internamente e o `Worker` recebe um blob _same-origin_, sem redirect.
 O console tenta primeiro os arquivos do **próprio teclado** (`/ffmpeg.js` + `/assets/worker-*.js`)
 e, se falhar, cai para o **unpkg com versão fixada**.
+
+**Causa raiz (parte 2):** o erro aparece principalmente quando a página é aberta por
+**`file://`**, onde o navegador bloqueia Workers e imports cross‑origin. **Solução:** rode por
+**`http://`** (use o **`serve.bat`** / `python -m http.server`). Veja [Como usar](#como-usar).
 
 ### As requisições falham / "offline"
 - Confirme o **IP** no topo e que está na **mesma rede**.
@@ -164,7 +181,8 @@ ffmpeg -i input \
 
 ```
 skyloong/
-├── skyloong-ui.html      ← o console (abra este arquivo)
+├── skyloong-ui.html      ← o console (a página principal)
+├── serve.bat             ← sobe servidor local e abre o navegador (recomendado)
 ├── README.md             ← este documento
 └── reverse/              ← artefatos da engenharia reversa (referência)
     ├── index.js          ← bundle original do teclado (minificado)
