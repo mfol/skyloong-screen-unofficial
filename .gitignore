@@ -1,0 +1,5 @@
+# binário grande baixado durante a engenharia reversa (amostra de vídeo do device)
+reverse/sample.mpeg
+
+# config local do Claude Code
+.claude/

@@ -1,0 +1,757 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SKYLOONG 4.0 · Console</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' rx='22' fill='%236d5efc'/><rect x='24' y='30' width='52' height='40' rx='6' fill='%230b0d17'/><rect x='30' y='36' width='40' height='28' rx='2' fill='%2300e0c6'/></svg>">
+<style>
+  :root{
+    --bg:#0b0d17; --bg2:#11142100; --panel:#151827; --panel2:#1b1f31; --panel3:#222842;
+    --line:#262c44; --txt:#e8eaf2; --mut:#8a91ad; --mut2:#5d6486;
+    --acc:#6d5efc; --acc2:#00e0c6; --ok:#34d399; --warn:#fbbf24; --err:#f87171;
+    --shadow:0 10px 40px -12px rgba(0,0,0,.6); --r:14px;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;height:100%}
+  body{
+    background:radial-gradient(1200px 600px at 80% -10%,#1a1f3a 0%,transparent 55%),
+               radial-gradient(900px 500px at -10% 110%,#15233a 0%,transparent 50%),var(--bg);
+    color:var(--txt); font:14px/1.5 'Segoe UI',system-ui,-apple-system,sans-serif;
+    -webkit-font-smoothing:antialiased;
+  }
+  a{color:var(--acc2)}
+  .app{display:grid;grid-template-columns:230px 1fr;min-height:100vh}
+  /* sidebar */
+  .side{background:linear-gradient(180deg,#11142a,#0d0f1f);border-right:1px solid var(--line);
+    padding:18px 14px;display:flex;flex-direction:column;gap:6px;position:sticky;top:0;height:100vh}
+  .brand{display:flex;align-items:center;gap:10px;padding:6px 8px 18px}
+  .brand .logo{width:34px;height:34px;border-radius:9px;background:linear-gradient(135deg,var(--acc),#8b7bff);
+    display:grid;place-items:center;box-shadow:0 6px 18px -6px var(--acc)}
+  .brand .logo svg{width:20px;height:20px}
+  .brand b{font-size:15px;letter-spacing:.3px}
+  .brand span{display:block;font-size:11px;color:var(--mut);font-weight:400}
+  .nav{display:flex;flex-direction:column;gap:3px;margin-top:4px}
+  .nav button{display:flex;align-items:center;gap:11px;background:none;border:0;color:var(--mut);
+    text-align:left;padding:10px 12px;border-radius:10px;cursor:pointer;font-size:13.5px;font-weight:500;
+    transition:.15s;width:100%}
+  .nav button:hover{background:var(--panel2);color:var(--txt)}
+  .nav button.active{background:linear-gradient(90deg,rgba(109,94,252,.22),rgba(109,94,252,.04));
+    color:#fff;box-shadow:inset 2px 0 0 var(--acc)}
+  .nav button svg{width:18px;height:18px;flex:none;opacity:.9}
+  .side .foot{margin-top:auto;font-size:11px;color:var(--mut);padding:10px 8px;line-height:1.6}
+  .dot{width:8px;height:8px;border-radius:50%;display:inline-block;background:var(--mut);box-shadow:0 0 0 0 rgba(0,0,0,0)}
+  .dot.on{background:var(--ok);box-shadow:0 0 10px var(--ok)}
+  .dot.off{background:var(--err)}
+  /* main */
+  .main{padding:22px 28px 60px;max-width:1100px}
+  .topbar{display:flex;align-items:center;gap:12px;margin-bottom:22px;flex-wrap:wrap}
+  .topbar h1{font-size:20px;margin:0;font-weight:650}
+  .topbar .sub{color:var(--mut);font-size:12.5px}
+  .conn{margin-left:auto;display:flex;align-items:center;gap:8px;background:var(--panel);border:1px solid var(--line);
+    padding:6px 10px;border-radius:10px;font-size:12.5px}
+  .conn input{background:#0c0e1a;border:1px solid var(--line);color:var(--txt);border-radius:7px;padding:5px 8px;width:150px;font:inherit}
+  /* cards */
+  .grid{display:grid;gap:16px}
+  .g2{grid-template-columns:repeat(2,1fr)} .g3{grid-template-columns:repeat(3,1fr)} .g4{grid-template-columns:repeat(4,1fr)}
+  @media(max-width:820px){.g2,.g3,.g4{grid-template-columns:1fr}.app{grid-template-columns:1fr}.side{position:static;height:auto;flex-direction:row;flex-wrap:wrap}.nav{flex-direction:row;flex-wrap:wrap}.side .foot{display:none}}
+  .card{background:linear-gradient(180deg,var(--panel),#12152300);background-color:var(--panel);
+    border:1px solid var(--line);border-radius:var(--r);padding:18px;box-shadow:var(--shadow)}
+  .card h3{margin:0 0 14px;font-size:13px;text-transform:uppercase;letter-spacing:.6px;color:var(--mut);font-weight:600;
+    display:flex;align-items:center;gap:8px}
+  .stat{display:flex;flex-direction:column;gap:3px}
+  .stat .v{font-size:26px;font-weight:680;letter-spacing:.3px}
+  .stat .l{font-size:12px;color:var(--mut)}
+  .kv{display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px dashed var(--line);font-size:13.5px}
+  .kv:last-child{border-bottom:0}
+  .kv .k{color:var(--mut)} .kv .val{font-weight:600}
+  .pill{font-size:11px;padding:2px 9px;border-radius:999px;font-weight:600}
+  .pill.ok{background:rgba(52,211,153,.16);color:var(--ok)} .pill.off{background:rgba(248,113,113,.14);color:var(--err)}
+  /* storage bar */
+  .bar{height:10px;border-radius:99px;background:#0c0e1a;overflow:hidden;border:1px solid var(--line)}
+  .bar i{display:block;height:100%;background:linear-gradient(90deg,var(--acc2),var(--acc));border-radius:99px;transition:width .5s}
+  /* buttons */
+  .btn{background:var(--acc);color:#fff;border:0;border-radius:9px;padding:9px 15px;font:inherit;font-weight:600;
+    cursor:pointer;display:inline-flex;align-items:center;gap:8px;transition:.15s}
+  .btn:hover{filter:brightness(1.12)} .btn:active{transform:translateY(1px)} .btn:disabled{opacity:.45;cursor:not-allowed}
+  .btn.ghost{background:var(--panel3);color:var(--txt)} .btn.ghost:hover{background:#2a3052}
+  .btn.danger{background:rgba(248,113,113,.16);color:var(--err)} .btn.danger:hover{background:rgba(248,113,113,.28)}
+  .btn.sm{padding:6px 10px;font-size:12.5px;border-radius:8px}
+  .btn svg{width:16px;height:16px}
+  /* toggle */
+  .row{display:flex;align-items:center;justify-content:space-between;padding:13px 4px;border-bottom:1px solid var(--line)}
+  .row:last-child{border-bottom:0}
+  .row .t{font-weight:600;font-size:14px} .row .d{font-size:12px;color:var(--mut);margin-top:2px}
+  .sw{width:46px;height:26px;border-radius:99px;background:#2a2f47;border:0;cursor:pointer;position:relative;transition:.2s;flex:none}
+  .sw::after{content:"";position:absolute;width:20px;height:20px;border-radius:50%;background:#fff;top:3px;left:3px;transition:.2s}
+  .sw.on{background:linear-gradient(90deg,var(--acc),var(--acc2))} .sw.on::after{left:23px}
+  /* inputs */
+  label.f{display:block;font-size:12px;color:var(--mut);margin:14px 0 6px;font-weight:600}
+  input.t,textarea.t,select.t{width:100%;background:#0c0e1a;border:1px solid var(--line);color:var(--txt);
+    border-radius:9px;padding:10px 12px;font:inherit}
+  textarea.t{resize:vertical;min-height:74px}
+  /* gallery */
+  .gal{display:grid;grid-template-columns:repeat(auto-fill,minmax(170px,1fr));gap:14px}
+  .thumb{background:var(--panel2);border:1px solid var(--line);border-radius:12px;overflow:hidden;position:relative;transition:.15s}
+  .thumb:hover{border-color:var(--acc);transform:translateY(-2px)}
+  .thumb .img{aspect-ratio:4/3;background:#0a0c16 center/cover no-repeat;display:grid;place-items:center}
+  .thumb .img .ph{color:var(--mut);font-size:11px;text-align:center;padding:10px;display:flex;flex-direction:column;gap:6px;align-items:center}
+  .thumb .meta{padding:9px 10px;font-size:11.5px}
+  .thumb .meta .nm{font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .thumb .meta .sz{color:var(--mut);margin-top:2px}
+  .thumb .acts{display:flex;gap:6px;padding:0 10px 10px}
+  .thumb .acts .btn{flex:1;justify-content:center;padding:6px}
+  .badge-active{position:absolute;top:8px;left:8px;background:var(--acc2);color:#04201d;font-size:10px;font-weight:700;
+    padding:3px 8px;border-radius:99px;box-shadow:0 4px 12px -4px var(--acc2)}
+  /* dropzone */
+  .drop{border:2px dashed var(--line);border-radius:14px;padding:30px;text-align:center;color:var(--mut);cursor:pointer;transition:.15s}
+  .drop:hover,.drop.drag{border-color:var(--acc);background:rgba(109,94,252,.06);color:var(--txt)}
+  .drop b{color:var(--txt)}
+  /* network list */
+  .net{display:flex;align-items:center;gap:12px;padding:11px 12px;border:1px solid var(--line);border-radius:10px;
+    margin-bottom:8px;cursor:pointer;transition:.15s;background:var(--panel2)}
+  .net:hover{border-color:var(--acc)} .net.sel{border-color:var(--acc2);background:rgba(0,224,198,.06)}
+  .net .ss{font-weight:600;flex:1}
+  .sig{display:flex;gap:2px;align-items:flex-end;height:16px}
+  .sig i{width:3px;background:var(--mut);border-radius:2px} .sig i.a{background:var(--acc2)}
+  /* toast */
+  .toasts{position:fixed;right:20px;bottom:20px;display:flex;flex-direction:column;gap:10px;z-index:99}
+  .toast{background:var(--panel3);border:1px solid var(--line);border-left:3px solid var(--acc);padding:12px 16px;
+    border-radius:10px;box-shadow:var(--shadow);font-size:13px;min-width:240px;animation:sl .25s;display:flex;gap:10px;align-items:center}
+  .toast.ok{border-left-color:var(--ok)} .toast.err{border-left-color:var(--err)} .toast.warn{border-left-color:var(--warn)}
+  @keyframes sl{from{transform:translateX(30px);opacity:0}}
+  .muted{color:var(--mut);font-size:12.5px}
+  .hide{display:none!important}
+  .screen-prev{aspect-ratio:4/3;width:100%;max-width:340px;border-radius:10px;border:1px solid var(--line);
+    background:#000 center/cover no-repeat;display:grid;place-items:center;color:var(--mut);font-size:12px;margin:0 auto}
+  .seg{display:inline-flex;background:#0c0e1a;border:1px solid var(--line);border-radius:9px;padding:3px;gap:3px}
+  .seg button{background:none;border:0;color:var(--mut);padding:7px 14px;border-radius:7px;cursor:pointer;font:inherit;font-weight:600}
+  .seg button.on{background:var(--acc);color:#fff}
+  .prog{height:8px;border-radius:99px;background:#0c0e1a;overflow:hidden;border:1px solid var(--line);margin-top:10px}
+  .prog i{display:block;height:100%;background:linear-gradient(90deg,var(--acc),var(--acc2));width:0;transition:width .2s}
+  code.k{background:#0c0e1a;border:1px solid var(--line);padding:1px 6px;border-radius:5px;font-size:12px;color:var(--acc2)}
+</style>
+</head>
+<body>
+<div class="app">
+  <!-- SIDEBAR -->
+  <aside class="side">
+    <div class="brand">
+      <div class="logo"><svg viewBox="0 0 100 100"><rect x="20" y="28" width="60" height="44" rx="7" fill="#0b0d17"/><rect x="27" y="35" width="46" height="30" rx="2" fill="#00e0c6"/></svg></div>
+      <div><b>SKYLOONG</b><span>4.0 Screen Console</span></div>
+    </div>
+    <nav class="nav" id="nav"></nav>
+    <div class="foot">
+      <div><span class="dot" id="dot"></span> <span id="connTxt">offline</span></div>
+      <div id="footInfo" style="margin-top:6px"></div>
+    </div>
+  </aside>
+
+  <!-- MAIN -->
+  <main class="main">
+    <div class="topbar">
+      <div>
+        <h1 id="pageTitle">Dashboard</h1>
+        <div class="sub" id="pageSub">Visão geral do dispositivo</div>
+      </div>
+      <div class="conn">
+        <span class="dot" id="dot2"></span>
+        <input id="host" placeholder="192.168.100.11">
+        <button class="btn sm" id="connectBtn">Conectar</button>
+      </div>
+    </div>
+    <div id="view"></div>
+  </main>
+</div>
+<div class="toasts" id="toasts"></div>
+
+<script type="module">
+/* ============================================================
+   SKYLOONG 4.0 Screen — Console (reverse-engineered client)
+   Comunica direto com o servidor embarcado do teclado.
+   ============================================================ */
+
+const SCREEN_W = 320, SCREEN_H = 240;
+const ICON = {
+  dash:'<path d="M3 13h8V3H3v10zm0 8h8v-6H3v6zm10 0h8V11h-8v10zm0-18v6h8V3h-8z"/>',
+  img:'<path d="M21 19V5a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2zM8.5 11l2.5 3 3.5-4.5L19 19H5l3.5-8z"/>',
+  vid:'<path d="M4 4h12a2 2 0 0 1 2 2v3l4-2v10l-4-2v3a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2z"/>',
+  apps:'<path d="M4 4h7v7H4V4zm9 0h7v7h-7V4zM4 13h7v7H4v-7zm9 0h7v7h-7v-7z"/>',
+  wifi:'<path d="M12 18a2 2 0 1 0 0 4 2 2 0 0 0 0-4zM2 8.8C4.6 6.4 8.1 5 12 5s7.4 1.4 10 3.8l-2.1 2.3C17.9 9.3 15.1 8.2 12 8.2S6.1 9.3 4.1 11.1L2 8.8zm3.6 3.9C7.3 11.1 9.5 10.2 12 10.2s4.7.9 6.4 2.5l-2.1 2.3c-1.1-1-2.6-1.6-4.3-1.6s-3.2.6-4.3 1.6l-2.1-2.3z"/>',
+  cog:'<path d="M12 8a4 4 0 1 0 0 8 4 4 0 0 0 0-8zm9.4 4l1.5 2.6-2 3.4-2.9-.8a8 8 0 0 1-1.4.8L15 22H9l-.6-3a8 8 0 0 1-1.4-.8l-2.9.8-2-3.4L3.6 12l-1.5-2.6 2-3.4 2.9.8c.4-.3.9-.6 1.4-.8L9 2h6l.6 3c.5.2 1 .5 1.4.8l2.9-.8 2 3.4L20.4 12z"/>',
+  refresh:'<path d="M12 4V1L8 5l4 4V6a6 6 0 1 1-6 6H4a8 8 0 1 0 8-8z"/>',
+  trash:'<path d="M6 7h12l-1 14H7L6 7zm3-3h6l1 2H8l1-2z"/>',
+  play:'<path d="M8 5v14l11-7z"/>', up:'<path d="M12 4l7 7h-4v7H9v-7H5l7-7z"/>',
+  save:'<path d="M5 3h11l3 3v15H5V3zm3 0v6h7V3H8z"/>'
+};
+const svg = p => `<svg viewBox="0 0 24 24" fill="currentColor">${p}</svg>`;
+
+/* ---------- state ---------- */
+let BASE = localStorage.getItem('sky_host') || guessBase();
+function guessBase(){
+  // se a página foi servida pelo próprio device, usa mesma origem
+  if(/^https?:/.test(location.protocol) && /^(192\.168|10\.|172\.)/.test(location.hostname)) return '';
+  return 'http://192.168.100.11';
+}
+let info = {}, cfg = {}, files = [], storage = {used:0,total:0};
+let online = false;
+
+/* ---------- request queue (servidor embarcado = 1 conexão por vez) ---------- */
+let chain = Promise.resolve();
+function q(fn){ const r = chain.then(fn, fn); chain = r.catch(()=>{}); return r; }
+function url(p){ return BASE + p; }
+async function apiGet(p, opt={}){
+  return q(async ()=>{
+    const r = await fetch(url(p), {cache:'no-store', ...opt});
+    if(!r.ok) throw new Error(p+' → '+r.status);
+    const ct = r.headers.get('content-type')||'';
+    return ct.includes('json') ? r.json() : r.text();
+  });
+}
+async function apiPost(p, body, opt={}){
+  return q(async ()=>{
+    const r = await fetch(url(p), {method:'POST', body, ...opt});
+    if(!r.ok) throw new Error(p+' → '+r.status);
+    return r.text().catch(()=> '');
+  });
+}
+async function apiDelete(p){
+  return q(async ()=>{
+    const r = await fetch(url(p), {method:'DELETE'});
+    if(!r.ok) throw new Error(p+' → '+r.status);
+    return r.text().catch(()=> '');
+  });
+}
+
+/* ---------- toast ---------- */
+function toast(msg, type='', ms=2600){
+  const el = document.createElement('div');
+  el.className = 'toast '+type;
+  el.innerHTML = `<span>${msg}</span>`;
+  document.getElementById('toasts').appendChild(el);
+  setTimeout(()=>{el.style.opacity=0;el.style.transition='.3s';setTimeout(()=>el.remove(),300)}, ms);
+}
+
+/* ---------- helpers ---------- */
+const fmtBytes = b => { b=+b||0; if(b<1024) return b+' B'; if(b<1048576) return (b/1024).toFixed(1)+' KB'; return (b/1048576).toFixed(2)+' MB'; };
+const esc = s => String(s??'').replace(/[<>&"]/g,c=>({'<':'&lt;','>':'&gt;','&':'&amp;','"':'&quot;'}[c]));
+const isImg = n => /\.(jpe?g|png|gif|bmp|webp)$/i.test(n);
+const isVid = n => /\.(mpe?g)$/i.test(n);
+const isSnd = n => /\.(wav|mp3)$/i.test(n);
+
+/* cache local de thumbnails (device não devolve arquivos) */
+const THUMBS = JSON.parse(localStorage.getItem('sky_thumbs')||'{}');
+function cacheThumb(name, dataUrl){ try{ THUMBS[name]=dataUrl; localStorage.setItem('sky_thumbs', JSON.stringify(THUMBS)); }catch{} }
+function dropThumb(name){ delete THUMBS[name]; localStorage.setItem('sky_thumbs', JSON.stringify(THUMBS)); }
+
+/* ---------- core data load ---------- */
+async function loadInfo(){ info = await apiGet('/info', {signal: AbortSignal.timeout(5000)}); return info; }
+async function loadCfg(){ try{ cfg = await apiGet('/config.json'); }catch{ cfg={}; } return cfg; }
+async function loadFiles(){
+  const d = await apiGet('/list?dir=/');
+  files = d.data||[]; storage = {used:+d.size||0, total:+d.total||0};
+  return files;
+}
+async function refreshAll(){
+  await loadInfo(); await loadCfg(); await loadFiles();
+}
+
+/* ============================================================
+   NAVIGATION
+   ============================================================ */
+const PAGES = [
+  {id:'dash', name:'Dashboard', icon:ICON.dash, sub:'Visão geral do dispositivo'},
+  {id:'img',  name:'Imagens',   icon:ICON.img,  sub:'Slideshow e galeria da tela'},
+  {id:'vid',  name:'Vídeo / GIF',icon:ICON.vid, sub:'Conversão e envio de vídeo'},
+  {id:'apps', name:'Apps da Tela',icon:ICON.apps,sub:'Widgets exibidos no teclado'},
+  {id:'wifi', name:'WiFi',       icon:ICON.wifi, sub:'Conexão de rede'},
+  {id:'cfg',  name:'Configurações',icon:ICON.cog,sub:'Tema, fuso, clima, texto'},
+];
+let current = 'dash';
+function buildNav(){
+  const nav = document.getElementById('nav');
+  nav.innerHTML = PAGES.map(p=>`<button data-id="${p.id}" class="${p.id===current?'active':''}">${svg(p.icon)}<span>${p.name}</span></button>`).join('');
+  nav.querySelectorAll('button').forEach(b=>b.onclick=()=>go(b.dataset.id));
+}
+function go(id){
+  current = id; buildNav();
+  const p = PAGES.find(x=>x.id===id);
+  document.getElementById('pageTitle').textContent = p.name;
+  document.getElementById('pageSub').textContent = p.sub;
+  RENDER[id]();
+}
+
+/* ============================================================
+   CONNECTION
+   ============================================================ */
+function setOnline(v){
+  online = v;
+  document.querySelectorAll('#dot,#dot2').forEach(d=>{d.className='dot '+(v?'on':'off')});
+  document.getElementById('connTxt').textContent = v ? (info.ip||BASE) : 'offline';
+  document.getElementById('footInfo').innerHTML = v && info.ssid
+    ? `Rede: <b>${esc(info.ssid)}</b><br>${fmtBytes(storage.used)} / ${fmtBytes(storage.total)}` : '';
+}
+async function connect(){
+  const h = document.getElementById('host').value.trim();
+  if(h){ BASE = /^https?:/.test(h) ? h.replace(/\/$/,'') : (h===location.host?'':'http://'+h); localStorage.setItem('sky_host', BASE); }
+  toast('Conectando…');
+  try{ await refreshAll(); setOnline(true); toast('Conectado a '+(info.ip||BASE), 'ok'); RENDER[current](); }
+  catch(e){ setOnline(false); toast('Falha ao conectar: '+e.message, 'err', 4000); RENDER[current](); }
+}
+
+/* ============================================================
+   RENDERERS
+   ============================================================ */
+const view = () => document.getElementById('view');
+const RENDER = {};
+
+/* ---- DASHBOARD ---- */
+RENDER.dash = ()=>{
+  if(!online){ view().innerHTML = offlineCard(); bindOffline(); return; }
+  const pct = storage.total? Math.min(100, storage.used/storage.total*100):0;
+  const imgs = files.filter(f=>isImg(f.name)).length, vids = files.filter(f=>isVid(f.name)).length;
+  const active = info.jpg_file;
+  view().innerHTML = `
+  <div class="grid g4" style="margin-bottom:16px">
+    ${statCard('Modo', info.mode||'—', 'Conexão atual')}
+    ${statCard('Tema', '#'+(info.theme??0), 'Estilo da tela')}
+    ${statCard('Imagens', imgs, 'na memória')}
+    ${statCard('Vídeos', vids, 'na memória')}
+  </div>
+  <div class="grid g3">
+    <div class="card" style="grid-column:span 2">
+      <h3>${svg(ICON.dash)} Estado do dispositivo</h3>
+      ${kv('Endereço IP', info.ip)}
+      ${kv('Rede WiFi (SSID)', info.ssid)}
+      ${kv('Fuso horário', 'UTC+'+(info.timezone??'—'))}
+      ${kv('Idioma', info.language===1?'中文 / outro (1)':info.language)}
+      ${kvPill('Slideshow de imagens', info.jpg_enable)}
+      ${kvPill('GIF / Vídeo', info.gif_enable)}
+      ${kvPill('Clima', info.weather_enable)}
+      ${kvPill('APS (velocidade)', info.aps_enable)}
+      ${kvPill('Info do sistema', info.sysinfo_enable)}
+    </div>
+    <div class="card">
+      <h3>${svg(ICON.cog)} Armazenamento</h3>
+      <div class="stat" style="margin-bottom:10px">
+        <div class="v">${pct.toFixed(0)}%</div>
+        <div class="l">${fmtBytes(storage.used)} de ${fmtBytes(storage.total)} usados</div>
+      </div>
+      <div class="bar"><i style="width:${pct}%"></i></div>
+      <div style="margin-top:18px" class="muted">Imagem ativa</div>
+      <div class="screen-prev" style="margin-top:8px;${active&&THUMBS[active]?`background-image:url(${THUMBS[active]})`:''}">
+        ${active? (THUMBS[active]?'':'📺 '+esc(active)) : 'nenhuma'}</div>
+      <button class="btn ghost sm" style="margin-top:14px;width:100%" id="refreshDash">${svg(ICON.refresh)} Atualizar</button>
+    </div>
+  </div>`;
+  document.getElementById('refreshDash').onclick = async()=>{ await refreshAll(); setOnline(true); RENDER.dash(); toast('Atualizado','ok'); };
+};
+
+/* ---- IMAGENS ---- */
+RENDER.img = ()=>{
+  if(!online){ view().innerHTML = offlineCard(); bindOffline(); return; }
+  const imgs = files.filter(f=>isImg(f.name));
+  const mode = info.jpg_mode||'roll';
+  const roll = Math.max(2000, Math.min(12000, info.time_roll||5000));
+  view().innerHTML = `
+  <div class="card" style="margin-bottom:16px">
+    <h3>${svg(ICON.play)} Modo de exibição</h3>
+    <div style="display:flex;gap:24px;flex-wrap:wrap;align-items:center">
+      <div class="seg" id="modeSeg">
+        <button data-m="fixed" class="${mode==='fixed'?'on':''}">Imagem fixa</button>
+        <button data-m="roll" class="${mode==='roll'?'on':''}">Slideshow</button>
+      </div>
+      <div style="${mode==='roll'?'':'opacity:.4;pointer-events:none'}" id="rollBox">
+        <span class="muted">Intervalo: </span>
+        <button class="btn ghost sm" id="rollDown">−</button>
+        <b id="rollVal" style="margin:0 8px">${(roll/1000).toFixed(0)}s</b>
+        <button class="btn ghost sm" id="rollUp">+</button>
+      </div>
+      <label class="row" style="border:0;padding:0;gap:10px;margin-left:auto">
+        <span class="t">Slideshow ligado</span>
+        <button class="sw ${info.jpg_enable?'on':''}" id="jpgEnable"></button>
+      </label>
+    </div>
+  </div>
+  <div class="card" style="margin-bottom:16px">
+    <h3>${svg(ICON.up)} Enviar imagem <span class="muted" style="text-transform:none;letter-spacing:0">(reescalada p/ 320×240 JPEG)</span></h3>
+    <div class="drop" id="drop">
+      <div style="font-size:30px;margin-bottom:6px">🖼️</div>
+      <div><b>Clique ou arraste</b> imagens aqui</div>
+      <div class="muted" style="margin-top:4px">livre: ${fmtBytes(storage.total-storage.used)}</div>
+    </div>
+    <input type="file" id="fileImg" accept="image/*" multiple class="hide">
+    <div class="prog hide" id="upProg"><i></i></div>
+  </div>
+  <div class="card">
+    <h3>${svg(ICON.img)} Galeria · ${imgs.length} imagem(ns)</h3>
+    ${imgs.length? `<div class="gal" id="gal">${imgs.map(galCell).join('')}</div>`
+      : `<div class="muted" style="padding:20px;text-align:center">Nenhuma imagem na memória.</div>`}
+  </div>`;
+  bindImg(mode, roll);
+};
+function galCell(f){
+  const active = f.name===info.jpg_file;
+  const th = THUMBS[f.name];
+  return `<div class="thumb" data-n="${esc(f.name)}">
+    ${active?'<div class="badge-active">NA TELA</div>':''}
+    <div class="img" style="${th?`background-image:url(${th})`:''}">
+      ${th?'':`<div class="ph"><span style="font-size:22px">🖼️</span>${esc(f.name)}</div>`}
+    </div>
+    <div class="meta"><div class="nm">${esc(f.name)}</div><div class="sz">${fmtBytes(f.size)}</div></div>
+    <div class="acts">
+      <button class="btn sm setActive">Exibir</button>
+      <button class="btn sm danger del">${svg(ICON.trash)}</button>
+    </div></div>`;
+}
+function bindImg(mode, roll){
+  // mode seg
+  document.querySelectorAll('#modeSeg button').forEach(b=>b.onclick=async()=>{
+    const m=b.dataset.m; await postJpg({jpg_mode:m}); info.jpg_mode=m; RENDER.img(); toast('Modo: '+m,'ok');
+  });
+  const r0 = roll;
+  document.getElementById('rollUp')?.addEventListener('click', async()=>{
+    const v=Math.min(12000,(info.time_roll||r0)+1000); await postJpg({time_roll:v}); info.time_roll=v;
+    document.getElementById('rollVal').textContent=(v/1000)+'s'; toast('Intervalo '+(v/1000)+'s','ok');
+  });
+  document.getElementById('rollDown')?.addEventListener('click', async()=>{
+    const v=Math.max(2000,(info.time_roll||r0)-1000); await postJpg({time_roll:v}); info.time_roll=v;
+    document.getElementById('rollVal').textContent=(v/1000)+'s'; toast('Intervalo '+(v/1000)+'s','ok');
+  });
+  document.getElementById('jpgEnable').onclick = async(e)=>{
+    const nv=!info.jpg_enable; await postJpg({enable:nv}); info.jpg_enable=nv; e.target.classList.toggle('on',nv);
+    toast('Slideshow '+(nv?'ligado':'desligado'),'ok');
+  };
+  // upload
+  const drop=document.getElementById('drop'), inp=document.getElementById('fileImg');
+  drop.onclick=()=>inp.click();
+  drop.ondragover=e=>{e.preventDefault();drop.classList.add('drag')};
+  drop.ondragleave=()=>drop.classList.remove('drag');
+  drop.ondrop=e=>{e.preventDefault();drop.classList.remove('drag');handleImgFiles([...e.dataTransfer.files]);};
+  inp.onchange=()=>handleImgFiles([...inp.files]);
+  // gallery acts
+  view().querySelectorAll('.thumb').forEach(t=>{
+    const name=t.dataset.n;
+    t.querySelector('.setActive').onclick=async()=>{
+      try{ await postJpg({jpg_file:name, jpg_mode:'fixed'}); info.jpg_file=name; info.jpg_mode='fixed'; RENDER.img(); toast('Exibindo '+name,'ok'); }
+      catch(e){ toast('Erro: '+e.message,'err'); }
+    };
+    t.querySelector('.del').onclick=()=>delFile(name, ()=>RENDER.img());
+  });
+}
+async function handleImgFiles(list){
+  const free = storage.total-storage.used;
+  for(const file of list){
+    if(!file.type.startsWith('image/')){ toast('Ignorado (não imagem): '+file.name,'warn'); continue; }
+    const prog=document.getElementById('upProg'); prog.classList.remove('hide'); prog.querySelector('i').style.width='10%';
+    try{
+      const {dataUrl, blob} = await imageToScreenJpeg(file);
+      if(blob.size > free){ toast('Memória insuficiente p/ '+file.name,'err'); prog.classList.add('hide'); return; }
+      const name = Date.now()+'.jpg';
+      const fd=new FormData(); fd.append('data', new File([blob], name, {type:'image/jpeg'}));
+      await apiPost('/edit', fd);
+      cacheThumb(name, dataUrl);
+      prog.querySelector('i').style.width='100%';
+      toast('Enviado: '+name,'ok');
+    }catch(e){ toast('Falha no upload: '+e.message,'err',4000); }
+    setTimeout(()=>document.getElementById('upProg')?.classList.add('hide'),500);
+  }
+  await loadFiles(); RENDER.img();
+}
+function imageToScreenJpeg(file){
+  return new Promise((res,rej)=>{
+    const img=new Image();
+    img.onload=()=>{
+      const c=document.createElement('canvas'); c.width=SCREEN_W; c.height=SCREEN_H;
+      const ctx=c.getContext('2d'); ctx.fillStyle='#000'; ctx.fillRect(0,0,SCREEN_W,SCREEN_H);
+      const s=Math.max(SCREEN_W/img.width, SCREEN_H/img.height); // cover
+      const w=img.width*s, h=img.height*s;
+      ctx.drawImage(img,(SCREEN_W-w)/2,(SCREEN_H-h)/2,w,h);
+      const dataUrl=c.toDataURL('image/jpeg',0.85);
+      c.toBlob(b=>res({dataUrl,blob:b}),'image/jpeg',0.85);
+    };
+    img.onerror=()=>rej(new Error('imagem inválida'));
+    img.src=URL.createObjectURL(file);
+  });
+}
+async function postJpg(over={}){
+  const e = over.enable ?? info.jpg_enable;
+  const tr = over.time_roll ?? info.time_roll ?? 5000;
+  const m = over.jpg_mode ?? info.jpg_mode ?? 'roll';
+  const f = over.jpg_file ?? info.jpg_file ?? '';
+  return apiPost(`/config_app_jpg?enable=${e}&time_roll=${tr}&jpg_mode=${m}&jpg_file=${encodeURIComponent(f)}`);
+}
+
+/* ---- VÍDEO / GIF ---- */
+let ffmpeg=null, ffLoading=null;
+RENDER.vid = ()=>{
+  if(!online){ view().innerHTML = offlineCard(); bindOffline(); return; }
+  const vids = files.filter(f=>isVid(f.name));
+  view().innerHTML = `
+  <div class="card" style="margin-bottom:16px">
+    <h3>${svg(ICON.vid)} Enviar vídeo / GIF</h3>
+    <p class="muted" style="margin-top:0">
+      O arquivo é convertido <b>no navegador</b> (ffmpeg.wasm) para o formato da tela:
+      MPEG-1, 320×240, ~24 fps, 500 kbps — idêntico ao app original.</p>
+    <div class="drop" id="vdrop">
+      <div style="font-size:30px;margin-bottom:6px">🎬</div>
+      <div><b>Clique ou arraste</b> um vídeo (mp4, webm, mkv, avi) ou GIF</div>
+      <div class="muted" style="margin-top:4px">livre: ${fmtBytes(storage.total-storage.used)}</div>
+    </div>
+    <input type="file" id="fileVid" accept="video/*,image/gif" class="hide">
+    <div id="vstatus" class="muted" style="margin-top:12px"></div>
+    <div class="prog hide" id="vprog"><i></i></div>
+  </div>
+  <div class="card" style="margin-bottom:16px">
+    <div class="row" style="border:0;padding:4px">
+      <div><div class="t">App de Vídeo/GIF na tela</div><div class="d">Exibe os vídeos enviados</div></div>
+      <button class="sw ${info.gif_enable?'on':''}" id="gifEnable"></button>
+    </div>
+  </div>
+  <div class="card">
+    <h3>${svg(ICON.vid)} Vídeos na memória · ${vids.length}</h3>
+    ${vids.length? `<div id="vlist">${vids.map(f=>`
+      <div class="row" data-n="${esc(f.name)}">
+        <div><div class="t">🎞️ ${esc(f.name)}</div><div class="d">${fmtBytes(f.size)}</div></div>
+        <button class="btn sm danger del">${svg(ICON.trash)} Apagar</button>
+      </div>`).join('')}</div>`
+      : `<div class="muted" style="padding:20px;text-align:center">Nenhum vídeo na memória.</div>`}
+  </div>`;
+  // binds
+  const vdrop=document.getElementById('vdrop'), vinp=document.getElementById('fileVid');
+  vdrop.onclick=()=>vinp.click();
+  vdrop.ondragover=e=>{e.preventDefault();vdrop.classList.add('drag')};
+  vdrop.ondragleave=()=>vdrop.classList.remove('drag');
+  vdrop.ondrop=e=>{e.preventDefault();vdrop.classList.remove('drag');if(e.dataTransfer.files[0])handleVideo(e.dataTransfer.files[0]);};
+  vinp.onchange=()=>vinp.files[0]&&handleVideo(vinp.files[0]);
+  document.getElementById('gifEnable').onclick=async(e)=>{
+    const nv=!info.gif_enable; await apiPost(`/config_app_gif?enable=${nv}`); info.gif_enable=nv; e.target.classList.toggle('on',nv);
+    toast('Vídeo/GIF '+(nv?'ligado':'desligado'),'ok');
+  };
+  view().querySelectorAll('#vlist .row').forEach(r=>{
+    r.querySelector('.del').onclick=()=>delFile(r.dataset.n, ()=>RENDER.vid());
+  });
+};
+// fetch segue redirects internamente e devolve um blob: same-origin.
+// Worker criado a partir de blob: NÃO sofre o bloqueio "cross-origin redirect of worker script".
+async function blobURL(u, type){
+  const r = await fetch(u);
+  if(!r.ok) throw new Error('fetch '+u+' → '+r.status);
+  return URL.createObjectURL(new Blob([await r.arrayBuffer()], {type}));
+}
+async function loadFFmpeg(){
+  if(ffmpeg) return ffmpeg;
+  if(ffLoading) return ffLoading;
+  const stat=(t)=>{const s=document.getElementById('vstatus'); if(s)s.textContent=t;};
+  ffLoading = (async()=>{
+    stat('Carregando motor de conversão (ffmpeg.wasm)…');
+    const dev = BASE || location.origin;
+    let FFmpeg, workerURL;
+    // 1) preferir os arquivos do próprio device (os mesmos que a UI de fábrica usa)
+    try{
+      ({F:FFmpeg} = await import(/* @vite-ignore */ dev+'/ffmpeg.js'));
+      workerURL = await blobURL(dev+'/assets/worker-224792ee.js','text/javascript');
+    }catch(e1){
+      // 2) fallback: unpkg (versão fixada; o blob evita o redirect cross-origin do worker)
+      const b='https://unpkg.com/@ffmpeg/ffmpeg@0.12.15/dist/esm';
+      ({FFmpeg} = await import(/* @vite-ignore */ b+'/index.js'));
+      workerURL = await blobURL(b+'/worker.js','text/javascript');
+    }
+    const ff=new FFmpeg();
+    ff.on('progress', ({progress})=>{ const p=document.getElementById('vprog'); if(p){p.classList.remove('hide');p.querySelector('i').style.width=Math.min(100,progress*100).toFixed(0)+'%';} });
+    const core='https://unpkg.com/@ffmpeg/core@0.12.6/dist/esm';
+    await ff.load({
+      classWorkerURL: workerURL,                                     // <- SEMPRE blob: (corrige o erro do worker)
+      coreURL: await blobURL(core+'/ffmpeg-core.js','text/javascript'),
+      wasmURL: await blobURL(core+'/ffmpeg-core.wasm','application/wasm'),
+    });
+    ffmpeg=ff; stat(''); return ff;
+  })();
+  ffLoading.catch(()=>{ ffLoading=null; });  // libera retry após falha
+  return ffLoading;
+}
+async function handleVideo(file){
+  const free = storage.total-storage.used;
+  const stat=(t)=>document.getElementById('vstatus').textContent=t;
+  try{
+    const ff=await loadFFmpeg();
+    stat('Convertendo "'+file.name+'"…');
+    const buf=new Uint8Array(await file.arrayBuffer());
+    await ff.writeFile('input', buf);
+    await ff.exec(['-i','input','-vf','scale=w=320:h=240:force_original_aspect_ratio=decrease,fps=23.98',
+      '-c:v','mpeg1video','-b:v','500k','-maxrate','800k','-an','-f','mpeg','out.mpeg']);
+    const out=await ff.readFile('out.mpeg');
+    const blob=new Blob([out],{type:'video/mpeg'});
+    if(blob.size>free){ stat(''); toast('Memória insuficiente ('+fmtBytes(blob.size)+')','err',4000); return; }
+    const name=Date.now()+'.mpeg';
+    const fd=new FormData(); fd.append('data', new File([blob], name, {type:'video/mpeg'}));
+    stat('Enviando '+name+' ('+fmtBytes(blob.size)+')…');
+    await apiPost('/edit', fd);
+    toast('Vídeo enviado: '+name,'ok'); stat('');
+    document.getElementById('vprog').classList.add('hide');
+    await loadFiles(); RENDER.vid();
+  }catch(e){ stat(''); toast('Falha no vídeo: '+e.message,'err',5000); console.error(e); }
+}
+
+/* ---- APPS DA TELA ---- */
+RENDER.apps = ()=>{
+  if(!online){ view().innerHTML = offlineCard(); bindOffline(); return; }
+  const apps=[
+    {k:'weather_enable', ep:'/config_app_weather', t:'Clima', d:'Previsão do tempo na tela', i:'🌤️'},
+    {k:'aps_enable',     ep:'/config_app_aps',     t:'APS (velocidade)', d:'Teclas por segundo / velocidade de digitação', i:'⚡'},
+    {k:'sysinfo_enable', ep:'/config_app_sysinfo', t:'Info do sistema', d:'Uso de CPU / memória do PC', i:'🖥️'},
+    {k:'gif_enable',     ep:'/config_app_gif',     t:'Vídeo / GIF', d:'Reproduz os vídeos enviados', i:'🎬'},
+    {k:'jpg_enable',     ep:'__jpg',               t:'Slideshow de imagens', d:'Exibe as imagens enviadas', i:'🖼️'},
+  ];
+  view().innerHTML = `<div class="card"><h3>${svg(ICON.apps)} Widgets exibidos no teclado</h3>
+    ${apps.map(a=>`<div class="row" data-k="${a.k}" data-ep="${a.ep}">
+      <div style="display:flex;gap:12px;align-items:center"><span style="font-size:22px">${a.i}</span>
+        <div><div class="t">${a.t}</div><div class="d">${a.d}</div></div></div>
+      <button class="sw ${info[a.k]?'on':''}"></button></div>`).join('')}
+    <p class="muted" style="margin-top:16px">Cada widget é uma "tela" que o teclado alterna automaticamente. Desligue os que não quiser ver.</p>
+  </div>`;
+  view().querySelectorAll('.row').forEach(r=>{
+    r.querySelector('.sw').onclick=async(e)=>{
+      const k=r.dataset.k, ep=r.dataset.ep, nv=!info[k];
+      try{
+        if(ep==='__jpg') await postJpg({enable:nv}); else await apiPost(`${ep}?enable=${nv}`);
+        info[k]=nv; e.target.classList.toggle('on',nv); toast(r.querySelector('.t').textContent+' '+(nv?'ligado':'desligado'),'ok');
+      }catch(err){ toast('Erro: '+err.message,'err'); }
+    };
+  });
+};
+
+/* ---- WIFI ---- */
+let nets=[], selSsid='';
+RENDER.wifi = ()=>{
+  if(!online){ view().innerHTML = offlineCard(); bindOffline(); return; }
+  view().innerHTML = `
+  <div class="card" style="margin-bottom:16px">
+    <h3>${svg(ICON.wifi)} Conectado a</h3>
+    ${kv('Rede atual', info.ssid||'—')} ${kv('IP', info.ip||'—')} ${kv('Modo', info.mode||'—')}
+  </div>
+  <div class="card">
+    <div style="display:flex;align-items:center;margin-bottom:14px">
+      <h3 style="margin:0">${svg(ICON.wifi)} Redes disponíveis</h3>
+      <button class="btn ghost sm" id="rescan" style="margin-left:auto">${svg(ICON.refresh)} Escanear</button>
+    </div>
+    <div id="netlist"><div class="muted">Clique em "Escanear" para listar.</div></div>
+    <div id="wifiForm" class="hide" style="margin-top:14px;border-top:1px solid var(--line);padding-top:14px">
+      <label class="f">Senha de <b id="selName"></b></label>
+      <input class="t" type="password" id="wpass" placeholder="senha da rede">
+      <button class="btn" id="wjoin" style="margin-top:12px">${svg(ICON.wifi)} Conectar</button>
+      <p class="muted" style="margin-top:8px">⚠️ Ao trocar de rede o IP muda — você precisará reconectar este console ao novo endereço.</p>
+    </div>
+  </div>`;
+  document.getElementById('rescan').onclick=scanWifi;
+  if(nets.length) renderNets();
+};
+async function scanWifi(){
+  const el=document.getElementById('netlist'); el.innerHTML='<div class="muted">Escaneando…</div>';
+  try{ const d=await apiGet('/scan_networks'); nets=d.networks||[]; renderNets(); }
+  catch(e){ el.innerHTML='<div class="muted">Falha: '+e.message+'</div>'; }
+}
+function bars(rssi){ const n = rssi>=-50?4:rssi>=-62?3:rssi>=-72?2:1; let h=''; for(let i=1;i<=4;i++) h+=`<i class="${i<=n?'a':''}" style="height:${i*3+3}px"></i>`; return h; }
+function renderNets(){
+  // dedupe por ssid (melhor rssi)
+  const map={}; nets.forEach(n=>{ if(!map[n.ssid]||n.rssi>map[n.ssid].rssi) map[n.ssid]=n; });
+  const list=Object.values(map).sort((a,b)=>b.rssi-a.rssi);
+  document.getElementById('netlist').innerHTML = list.map(n=>`
+    <div class="net ${n.ssid===selSsid?'sel':''}" data-s="${esc(n.ssid)}">
+      <div class="sig">${bars(n.rssi)}</div>
+      <div class="ss">${esc(n.ssid)}</div>
+      <div class="muted">${n.rssi} dBm</div>
+    </div>`).join('');
+  document.querySelectorAll('.net').forEach(el=>el.onclick=()=>{
+    selSsid=el.dataset.s; renderNets();
+    document.getElementById('wifiForm').classList.remove('hide');
+    document.getElementById('selName').textContent=selSsid;
+    document.getElementById('wjoin').onclick=joinWifi;
+  });
+}
+async function joinWifi(){
+  const pass=document.getElementById('wpass').value;
+  const fd=new FormData(); fd.append('ssid',selSsid); fd.append('password',pass);
+  toast('Enviando credenciais…');
+  try{ await apiPost('/config_wifi', fd); toast('Credenciais enviadas — o teclado vai reconectar','ok',5000); }
+  catch(e){ toast('Erro: '+e.message,'err',4000); }
+}
+
+/* ---- CONFIGURAÇÕES ---- */
+RENDER.cfg = ()=>{
+  if(!online){ view().innerHTML = offlineCard(); bindOffline(); return; }
+  view().innerHTML = `
+  <div class="grid g2">
+    <div class="card">
+      <h3>${svg(ICON.cog)} Tema da tela</h3>
+      <div class="seg" id="themeSeg">
+        ${[0,1,2].map(i=>`<button data-th="${i}" class="${(info.theme??0)==i?'on':''}">Tema ${i}</button>`).join('')}
+      </div>
+      <label class="f">Fuso horário (UTC+)</label>
+      <select class="t" id="tz">${Array.from({length:27},(_,i)=>i-12).map(z=>`<option value="${z}" ${ (info.timezone??8)==z?'selected':'' }>UTC${z>=0?'+':''}${z}</option>`).join('')}</select>
+      <button class="btn ghost sm" id="saveTz" style="margin-top:10px">${svg(ICON.save)} Salvar fuso</button>
+    </div>
+    <div class="card">
+      <h3>${svg(ICON.cog)} Clima & Texto</h3>
+      <label class="f">Cidade</label>
+      <input class="t" id="cCity" value="${esc(cfg.city||'')}">
+      <label class="f">Chave da API de clima (weather)</label>
+      <input class="t" id="cWeather" value="${esc(cfg.weather||'')}">
+      <label class="f">Texto personalizado (userdata)</label>
+      <textarea class="t" id="cUser">${esc(cfg.userdata||'')}</textarea>
+      <button class="btn" id="saveCfg" style="margin-top:12px">${svg(ICON.save)} Salvar config.json</button>
+    </div>
+  </div>
+  <div class="card" style="margin-top:16px">
+    <h3>${svg(ICON.cog)} Avançado</h3>
+    <div class="muted">Endereço base atual: <code class="k">${BASE||location.origin}</code></div>
+    <div class="muted" style="margin-top:6px">Tela: <code class="k">320 × 240</code> · Storage: <code class="k">${fmtBytes(storage.total)}</code></div>
+  </div>`;
+  document.querySelectorAll('#themeSeg button').forEach(b=>b.onclick=async()=>{
+    const th=b.dataset.th; try{ await apiPost(`/config_theme?theme=${th}`,''); info.theme=+th; RENDER.cfg(); toast('Tema '+th,'ok'); }catch(e){toast('Erro: '+e.message,'err');}
+  });
+  document.getElementById('saveTz').onclick=async()=>{
+    const z=document.getElementById('tz').value; try{ await apiPost(`/config_timezone?timezone=${z}`,''); info.timezone=+z; toast('Fuso salvo','ok'); }catch(e){toast('Erro: '+e.message,'err');}
+  };
+  document.getElementById('saveCfg').onclick=async()=>{
+    const body={ ip:cfg.ip||'192.168.1.1', port:cfg.port||1648,
+      weather:document.getElementById('cWeather').value, city:document.getElementById('cCity').value,
+      userdata:document.getElementById('cUser').value };
+    try{ await apiPost('/config.json', new Blob([JSON.stringify(body)],{type:'application/json'})); cfg=body; toast('Configuração salva','ok'); }
+    catch(e){ toast('Erro: '+e.message,'err'); }
+  };
+};
+
+/* ---- shared bits ---- */
+function statCard(label,val,sub){ return `<div class="card"><div class="stat"><div class="v">${esc(val)}</div><div class="l">${esc(label)}</div></div><div class="muted" style="margin-top:6px;font-size:11px">${esc(sub)}</div></div>`; }
+function kv(k,v){ return `<div class="kv"><span class="k">${esc(k)}</span><span class="val">${esc(v??'—')}</span></div>`; }
+function kvPill(k,v){ return `<div class="kv"><span class="k">${esc(k)}</span><span class="pill ${v?'ok':'off'}">${v?'ON':'OFF'}</span></div>`; }
+function offlineCard(){ return `<div class="card" style="text-align:center;padding:40px">
+  <div style="font-size:40px;margin-bottom:10px">🔌</div>
+  <h3 style="justify-content:center">Sem conexão com o dispositivo</h3>
+  <p class="muted">Verifique o IP no topo (padrão <code class="k">192.168.100.11</code>) e que seu PC está na mesma rede do teclado.</p>
+  <button class="btn" id="retry" style="margin-top:6px">${svg(ICON.refresh)} Tentar conectar</button>
+  <p class="muted" style="margin-top:18px;font-size:11px">Dica: abra este arquivo via <code class="k">file://</code> ou <code class="k">http://</code> (não https) para evitar bloqueio de conteúdo misto.</p>
+</div>`; }
+function bindOffline(){ const b=document.getElementById('retry'); if(b)b.onclick=connect; }
+async function delFile(name, after){
+  if(!confirm('Apagar "'+name+'" do teclado?')) return;
+  try{ await apiDelete('/edit?filename=/'+encodeURIComponent(name)); dropThumb(name); toast('Apagado: '+name,'ok'); await loadFiles(); after&&after(); }
+  catch(e){ toast('Erro ao apagar: '+e.message,'err'); }
+}
+
+/* ============================================================
+   BOOT
+   ============================================================ */
+document.getElementById('host').value = BASE.replace(/^https?:\/\//,'') || location.host;
+document.getElementById('connectBtn').onclick = connect;
+document.getElementById('host').addEventListener('keydown',e=>{if(e.key==='Enter')connect();});
+buildNav();
+go('dash');
+setOnline(false);
+connect();
+// heartbeat
+setInterval(async()=>{ try{ await loadInfo(); if(!online){ await loadFiles(); setOnline(true); RENDER[current](); } else setOnline(true);}catch{ if(online){ setOnline(false);} } }, 8000);
+</script>
+</body>
+</html>
