@@ -271,14 +271,46 @@ let META = {};                                   // name -> {thumb,label,type,si
 const thumbOf = n => META[n] && META[n].thumb;
 const labelOf = n => (META[n] && META[n].label) || '';
 function persistLocal(){ try{ localStorage.setItem('sky_meta', JSON.stringify(META)); }catch{} }
-async function loadMeta(){
-  if(THUMB_BASE){
-    try{ const r=await fetch(THUMB_BASE+'/api/thumbs',{cache:'no-store'}); if(r.ok){ META=await r.json(); dbOnline=true; PROXY=THUMB_BASE; return; } }catch{}
+// Detecta o server.py com algumas tentativas: o serve.bat abre o navegador ANTES de o
+// server.py terminar de subir, então a 1ª requisição pode falhar numa máquina mais lenta.
+// Sem o retry, PROXY ficava null pra sessão toda e o DELETE caía direto no device (erro CORS).
+async function probeServer(tries=8, delay=250){
+  if(!THUMB_BASE) return false;
+  for(let i=0;i<tries;i++){
+    try{ const r=await fetch(THUMB_BASE+'/api/health',{cache:'no-store'}); if(r.ok) return true; }catch{}
+    await new Promise(res=>setTimeout(res, delay));
   }
-  dbOnline=false; PROXY=null;
+  return false;
+}
+async function loadMeta(){
+  if(await probeServer()){
+    try{ const r=await fetch(THUMB_BASE+'/api/thumbs',{cache:'no-store'}); if(r.ok){ META=await r.json(); dbOnline=true; PROXY=THUMB_BASE; updateProxyWarning(); return; } }catch{}
+  }
+  dbOnline=false; PROXY=null; updateProxyWarning();
   META = JSON.parse(localStorage.getItem('sky_meta')||'null') || {};
   const old = JSON.parse(localStorage.getItem('sky_thumbs')||'null');   // migra formato antigo
   if(old){ for(const k in old){ META[k]=META[k]||{thumb:old[k]}; } persistLocal(); localStorage.removeItem('sky_thumbs'); }
+}
+
+// Estratégia 3: aviso visível quando NÃO há proxy local e o device é remoto (BASE setado).
+// Nesse cenário o DELETE vai direto pro teclado e quebra por preflight de CORS.
+function updateProxyWarning(){
+  const need = !PROXY && !!BASE;
+  let el = document.getElementById('proxyWarn');
+  if(need){
+    if(!el){
+      el = document.createElement('div');
+      el.id = 'proxyWarn';
+      el.style.cssText = 'margin:0 0 14px;padding:10px 14px;border-radius:10px;background:#3a2a00;border:1px solid #7a5b00;color:#ffd479;font-size:13px;line-height:1.5';
+      const main = document.querySelector('main.main'), view = document.getElementById('view');
+      if(main && view) main.insertBefore(el, view);
+    }
+    el.innerHTML = '⚠️ <b>Proxy local desligado.</b> Esta página não está sendo servida pelo '
+      + '<code>server.py</code> (ou ele subiu depois do carregamento). Apagar arquivos (DELETE) '
+      + 'vai falhar por CORS. Rode pelo <code>serve.bat</code> e recarregue (Ctrl+F5).';
+  } else if(el){
+    el.remove();
+  }
 }
 async function saveMeta(name, data){             // data parcial: {thumb?,label?,type?,size?}
   META[name] = Object.assign({}, META[name], data, {ts:Date.now()});
@@ -342,7 +374,7 @@ function setOnline(v){
 }
 async function connect(){
   const h = document.getElementById('host').value.trim();
-  if(h){ BASE = /^https?:/.test(h) ? h.replace(/\/$/,'') : (h===location.host?'':'http://'+h); localStorage.setItem('sky_host', BASE); }
+  if(h){ BASE = /^https?:/.test(h) ? h.replace(/\/$/,'') : (h===location.host?'':'http://'+h); localStorage.setItem('sky_host', BASE); updateProxyWarning(); }
   toast('Conectando…');
   try{ await refreshAll(); setOnline(true); toast('Conectado a '+(info.ip||BASE), 'ok'); RENDER[current](); }
   catch(e){ setOnline(false); toast('Falha ao conectar: '+e.message, 'err', 4000); RENDER[current](); }
@@ -835,6 +867,16 @@ async function delFile(name, after){
 /* ============================================================
    BOOT
    ============================================================ */
+// Depuração: como o script é um ES module, as variáveis não viram globais.
+// Digite `skyDebug` no console pra inspecionar o estado (PROXY, THUMB_BASE, etc.).
+window.skyDebug = {
+  get PROXY(){ return PROXY; },
+  get THUMB_BASE(){ return THUMB_BASE; },
+  get dbOnline(){ return dbOnline; },
+  get BASE(){ return BASE; },
+  get online(){ return online; },
+  url,
+};
 document.getElementById('host').value = BASE.replace(/^https?:\/\//,'') || location.host;
 document.getElementById('connectBtn').onclick = connect;
 document.getElementById('host').addEventListener('keydown',e=>{if(e.key==='Enter')connect();});

@@ -20,8 +20,10 @@ REM abre o navegador na pagina ja servida
 start "" "%URL%"
 
 REM Preferir server.py (Python) -> habilita o banco SQLite de thumbnails/apelidos.
-where python >nul 2>nul && ( python "%~dp0server.py" & goto :end )
+REM Tenta o launcher "py" PRIMEIRO: no Windows o "where python" costuma achar o stub da
+REM Microsoft Store (abre a Store e nao roda nada). O "py" evita essa armadilha.
 where py     >nul 2>nul && ( py "%~dp0server.py"     & goto :end )
+where python >nul 2>nul && ( python "%~dp0server.py" & goto :end )
 
 REM Sem Python: cai para servidor estatico simples (sem banco; usa cache do navegador).
 echo  Python nao encontrado: rodando sem banco SQLite (thumbnails ficam so no navegador).
