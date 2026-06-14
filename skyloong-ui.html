@@ -21,6 +21,9 @@
     -webkit-font-smoothing:antialiased;
   }
   a{color:var(--acc2)}
+  /* tamanho padrão dos ícones SVG inline (especificidade 0 — regras específicas vencem) */
+  :where(svg){width:1em;height:1em;flex:none;vertical-align:-0.125em}
+  .card h3 svg{width:15px;height:15px;opacity:.85}
   .app{display:grid;grid-template-columns:230px 1fr;min-height:100vh}
   /* sidebar */
   .side{background:linear-gradient(180deg,#11142a,#0d0f1f);border-right:1px solid var(--line);
