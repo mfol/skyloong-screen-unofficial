@@ -614,10 +614,9 @@ RENDER.vid = ()=>{
   <div class="card" style="margin-bottom:16px">
     <h3>${svg(ICON.vid)} Enviar vídeo / GIF</h3>
     <p class="muted" style="margin-top:0">
-      O arquivo é convertido <b>no navegador</b> (ffmpeg.wasm) para o formato da tela:
-      <br>• <b>Vídeo</b> → MPEG-1, 320×240, ~24 fps, 500 kbps (idêntico ao app original).
-      <br>• <b>GIF</b> → <b>.gif</b> 320×240 (4:3), 15 fps, ≤ 10 s, abaixo de 15 MB.
-      <br>Em ambos, o tamanho é validado contra a <b>memória livre</b> antes do envio.</p>
+      O arquivo (vídeo <b>ou GIF</b>) é convertido <b>no navegador</b> (ffmpeg.wasm) para o
+      formato da tela: MPEG-1, 320×240, ~24 fps, 500 kbps — idêntico ao app original.
+      O tamanho gerado é validado contra a <b>memória livre</b> antes do envio.</p>
     <div class="drop" id="vdrop">
       <div style="font-size:30px;margin-bottom:6px">🎬</div>
       <div><b>Clique ou arraste</b> um vídeo (mp4, webm, mkv, avi) ou GIF</div>
@@ -643,8 +642,8 @@ RENDER.vid = ()=>{
   vdrop.onclick=()=>vinp.click();
   vdrop.ondragover=e=>{e.preventDefault();vdrop.classList.add('drag')};
   vdrop.ondragleave=()=>vdrop.classList.remove('drag');
-  vdrop.ondrop=e=>{e.preventDefault();vdrop.classList.remove('drag');if(e.dataTransfer.files[0])handleMedia(e.dataTransfer.files[0]);};
-  vinp.onchange=()=>vinp.files[0]&&handleMedia(vinp.files[0]);
+  vdrop.ondrop=e=>{e.preventDefault();vdrop.classList.remove('drag');if(e.dataTransfer.files[0])handleVideo(e.dataTransfer.files[0]);};
+  vinp.onchange=()=>vinp.files[0]&&handleVideo(vinp.files[0]);
   document.getElementById('gifEnable').onclick=async(e)=>{
     const nv=!info.gif_enable; await apiPost(`/config_app_gif?enable=${nv}`); info.gif_enable=nv; e.target.classList.toggle('on',nv);
     toast('Vídeo/GIF '+(nv?'ligado':'desligado'),'ok');
@@ -694,10 +693,6 @@ async function loadFFmpeg(){
   ffLoading.catch(()=>{ ffLoading=null; });  // libera retry após falha
   return ffLoading;
 }
-/* Regras de conversão de GIF (pedido do projeto):
-   320×240 (4:3), .gif, 10–20 fps, duração curta (≤ maxDur s), abaixo de 15 MB. */
-const GIF_RULES = { w:SCREEN_W, h:SCREEN_H, fps:15, maxDur:10, maxBytes:15*1024*1024 };
-
 /* Valida se o arquivo gerado cabe na memória livre do device (e respeita o teto, se houver).
    Retorna {ok:true} ou {ok:false, why:'...'}. */
 function fitsMemory(bytes, maxBytes){
@@ -707,46 +702,8 @@ function fitsMemory(bytes, maxBytes){
   return {ok:true};
 }
 
-/* Dispatcher: GIF segue a rota de conversão p/ .gif; o resto vai p/ vídeo (MPEG-1). */
-function handleMedia(file){
-  if(file && (/image\/gif/i.test(file.type) || /\.gif$/i.test(file.name))) return handleGif(file);
-  return handleVideo(file);
-}
-
-/* Converte QUALQUER GIF para o formato aceito: 320×240 (4:3, com barras pretas se preciso),
-   fps fixo dentro de 10–20, duração limitada e validação de tamanho/memória. Usa paleta
-   (2 passos) para manter a qualidade do .gif. */
-async function handleGif(file){
-  const stat=(t)=>{const s=document.getElementById('vstatus'); if(s)s.textContent=t;};
-  const thumbP = mediaThumb(file).catch(()=>null);   // 1º quadro do arquivo original
-  try{
-    const ff=await loadFFmpeg();
-    const {w,h,fps,maxDur,maxBytes}=GIF_RULES;
-    // encaixa em 320×240 sem distorcer (decrease) e completa p/ 4:3 exato com barras pretas
-    const vf = `fps=${fps},scale=${w}:${h}:force_original_aspect_ratio=decrease,pad=${w}:${h}:(ow-iw)/2:(oh-ih)/2:color=black`;
-    stat(`Convertendo GIF "${file.name}" → 320×240, ${fps}fps, até ${maxDur}s…`);
-    const buf=new Uint8Array(await file.arrayBuffer());
-    await ff.writeFile('input', buf);
-    // passo 1: gera a paleta (melhora bastante a qualidade do gif final)
-    await ff.exec(['-i','input','-t',String(maxDur),'-vf', vf+',palettegen=stats_mode=diff','palette.png']);
-    // passo 2: aplica a paleta e limita a duração
-    await ff.exec(['-i','input','-i','palette.png','-t',String(maxDur),
-      '-lavfi', vf+'[x];[x][1:v]paletteuse=dither=bayer:bayer_scale=5','-f','gif','out.gif']);
-    const out=await ff.readFile('out.gif');
-    const blob=new Blob([out],{type:'image/gif'});
-    const fit=fitsMemory(blob.size, maxBytes);
-    if(!fit.ok){ stat(''); toast('GIF rejeitado: '+fit.why+' — gerado '+fmtBytes(blob.size),'err',5000); return; }
-    const name=Date.now()+'.gif';
-    const fd=new FormData(); fd.append('data', new File([blob], name, {type:'image/gif'}));
-    stat('Enviando '+name+' ('+fmtBytes(blob.size)+')…');
-    await apiPost('/edit', fd);
-    await saveMeta(name, {thumb: await thumbP, type:'gif', size: blob.size, label: cleanName(file.name)});
-    toast('GIF enviado: '+name,'ok'); stat('');
-    document.getElementById('vprog').classList.add('hide');
-    await loadFiles(); RENDER.vid();
-  }catch(e){ stat(''); toast('Falha no GIF: '+e.message,'err',5000); console.error(e); }
-}
-
+// Vídeo E GIF seguem a MESMA rota: convertidos para MPEG-1 320×240 (redimensionado p/ caber
+// na tela) e exibidos pelo app de Vídeo/GIF. GIF só preserva o "tipo" gif na miniatura.
 async function handleVideo(file){
   const stat=(t)=>document.getElementById('vstatus').textContent=t;
   const thumbP = mediaThumb(file).catch(()=>null);   // 1º quadro do arquivo original
@@ -765,7 +722,7 @@ async function handleVideo(file){
     const fd=new FormData(); fd.append('data', new File([blob], name, {type:'video/mpeg'}));
     stat('Enviando '+name+' ('+fmtBytes(blob.size)+')…');
     await apiPost('/edit', fd);
-    await saveMeta(name, {thumb: await thumbP, type:'video', size: blob.size, label: cleanName(file.name)});
+    await saveMeta(name, {thumb: await thumbP, type: file.type.includes('gif')?'gif':'video', size: blob.size, label: cleanName(file.name)});
     toast('Vídeo enviado: '+name,'ok'); stat('');
     document.getElementById('vprog').classList.add('hide');
     await loadFiles(); RENDER.vid();
