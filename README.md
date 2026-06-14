@@ -115,6 +115,17 @@ e, se falhar, cai para o **unpkg com versão fixada**.
 **`file://`**, onde o navegador bloqueia Workers e imports cross‑origin. **Solução:** rode por
 **`http://`** (use o **`serve.bat`** / `python -m http.server`). Veja [Como usar](#como-usar).
 
+### `DELETE ... blocked by CORS policy: Redirect is not allowed for a preflight request`
+Apagar usava `DELETE` direto no teclado a partir de `http://localhost:8000` (origem diferente).
+Métodos como `DELETE` disparam um **preflight `OPTIONS`**, e o servidor embarcado responde o
+preflight com um **redirect** (→ portal `/wifi`) — o navegador proíbe redirect em preflight.
+(Adicionar não dava erro porque `POST multipart/form-data` é "simple request", sem preflight.)
+O app de fábrica não sofre isso por rodar **na mesma origem** do teclado.
+
+**Corrigido:** quando o `server.py` está rodando, **todas** as chamadas ao teclado passam por ele
+(`/dev/<host>/<path>`). A página fala só com `localhost` (mesma origem ⇒ sem CORS/preflight) e o
+Python repassa ao teclado. Sem o `server.py`, as chamadas vão direto (o `DELETE` pode falhar).
+
 ### As requisições falham / "offline"
 - Confirme o **IP** no topo e que está na **mesma rede**.
 - Abra por **`file://`** ou **`http://`** (nunca `https://`).
@@ -220,6 +231,19 @@ CREATE TABLE thumbs(
 **apagar** o arquivo no teclado, faz `DELETE`. Renomear (editar o apelido na galeria) faz um
 `PUT` só com o `label`. Se o `server.py` não estiver no ar (ex.: página aberta via `file://`),
 tudo isso cai para o `localStorage` do navegador — sem erro.
+
+### Proxy para o teclado
+
+Além das thumbnails, o `server.py` também atua como **proxy** para o teclado:
+
+| Método | Endpoint | Função |
+|---|---|---|
+| `* (qualquer)` | `/dev/<host>/<path>` | repassa a requisição para `http://<host>/<path>` |
+
+O frontend, quando detecta o servidor local, manda **todas** as chamadas do device por aqui
+(ex.: `/dev/192.168.100.11/edit?...`). Como a página passa a falar só com a **mesma origem**
+(`localhost`), o navegador não dispara preflight de CORS — o que resolve o erro do `DELETE`
+(veja [Solução de problemas](#delete--blocked-by-cors-policy-redirect-is-not-allowed-for-a-preflight-request)).
 
 ---
 

@@ -209,11 +209,17 @@ function guessBase(){
 }
 let info = {}, cfg = {}, files = [], storage = {used:0,total:0};
 let online = false;
+let PROXY = null;   // base do server.py local; quando presente, as chamadas ao device passam por ele
+                    // (mesma origem ⇒ sem CORS/preflight ⇒ DELETE etc. funcionam)
 
 /* ---------- request queue (servidor embarcado = 1 conexão por vez) ---------- */
 let chain = Promise.resolve();
 function q(fn){ const r = chain.then(fn, fn); chain = r.catch(()=>{}); return r; }
-function url(p){ return BASE + p; }
+function url(p){
+  // via proxy local: http://localhost:8000/dev/<host-do-device><path>
+  if(PROXY && BASE) return PROXY + '/dev/' + BASE.replace(/^https?:\/\//,'') + p;
+  return BASE + p;   // direto (página servida pelo próprio device, ou file://)
+}
 async function apiGet(p, opt={}){
   return q(async ()=>{
     const r = await fetch(url(p), {cache:'no-store', ...opt});
@@ -267,9 +273,9 @@ const labelOf = n => (META[n] && META[n].label) || '';
 function persistLocal(){ try{ localStorage.setItem('sky_meta', JSON.stringify(META)); }catch{} }
 async function loadMeta(){
   if(THUMB_BASE){
-    try{ const r=await fetch(THUMB_BASE+'/api/thumbs',{cache:'no-store'}); if(r.ok){ META=await r.json(); dbOnline=true; return; } }catch{}
+    try{ const r=await fetch(THUMB_BASE+'/api/thumbs',{cache:'no-store'}); if(r.ok){ META=await r.json(); dbOnline=true; PROXY=THUMB_BASE; return; } }catch{}
   }
-  dbOnline=false;
+  dbOnline=false; PROXY=null;
   META = JSON.parse(localStorage.getItem('sky_meta')||'null') || {};
   const old = JSON.parse(localStorage.getItem('sky_thumbs')||'null');   // migra formato antigo
   if(old){ for(const k in old){ META[k]=META[k]||{thumb:old[k]}; } persistLocal(); localStorage.removeItem('sky_thumbs'); }

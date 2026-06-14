@@ -26,10 +26,14 @@ import json
 import os
 import threading
 import urllib.parse
+import urllib.request
+import urllib.error
+import sys
 
 ROOT = os.path.dirname(os.path.abspath(__file__))
 DB_PATH = os.path.join(ROOT, "thumbnails.sqlite")
-PORT = int(os.environ.get("PORT", "8000"))
+# porta: argumento na linha de comando tem prioridade (ex.: python server.py 8011), depois env PORT, senao 8000
+PORT = int(sys.argv[1]) if len(sys.argv) > 1 and sys.argv[1].isdigit() else int(os.environ.get("PORT", "8000"))
 _LOCK = threading.Lock()
 
 
@@ -99,7 +103,43 @@ class Handler(http.server.SimpleHTTPRequestHandler):
         self._cors()
         self.end_headers()
 
+    # ---------- proxy para o teclado (evita CORS/preflight: a pagina fala só com este servidor) ----------
+    def _proxy(self):
+        # caminho: /dev/<host>/<resto>?<query>  ->  http://<host>/<resto>?<query>
+        rest = self.path[len("/dev/"):]
+        if "/" in rest:
+            host, tail = rest.split("/", 1)
+            tail = "/" + tail
+        else:
+            host, tail = rest, "/"
+        if not host:
+            return self._json({"error": "host do device ausente"}, 400)
+        target = "http://" + host + tail
+        n = int(self.headers.get("Content-Length") or 0)
+        body = self.rfile.read(n) if n else None
+        req = urllib.request.Request(target, data=body, method=self.command)
+        ct = self.headers.get("Content-Type")
+        if ct:
+            req.add_header("Content-Type", ct)
+        try:
+            with urllib.request.urlopen(req, timeout=20) as r:
+                data, code = r.read(), r.getcode()
+                rct = r.headers.get("Content-Type", "application/octet-stream")
+        except urllib.error.HTTPError as e:
+            data, code = e.read(), e.code
+            rct = e.headers.get("Content-Type", "text/plain")
+        except Exception as e:
+            return self._json({"error": "proxy: " + str(e)}, 502)
+        self.send_response(code)
+        self.send_header("Content-Type", rct)
+        self.send_header("Content-Length", str(len(data)))
+        self._cors()
+        self.end_headers()
+        self.wfile.write(data)
+
     def do_GET(self):
+        if self.path.startswith("/dev/"):
+            return self._proxy()
         path = urllib.parse.urlparse(self.path).path
         if path == "/api/health":
             return self._json({"ok": True})
@@ -143,16 +183,22 @@ class Handler(http.server.SimpleHTTPRequestHandler):
         return self._json({"ok": True})
 
     def do_PUT(self):
+        if self.path.startswith("/dev/"):
+            return self._proxy()
         if urllib.parse.urlparse(self.path).path == "/api/thumb":
             return self._upsert()
         return self._json({"error": "nao encontrado"}, 404)
 
     def do_POST(self):
+        if self.path.startswith("/dev/"):
+            return self._proxy()
         if urllib.parse.urlparse(self.path).path == "/api/thumb":
             return self._upsert()
         return self._json({"error": "nao encontrado"}, 404)
 
     def do_DELETE(self):
+        if self.path.startswith("/dev/"):
+            return self._proxy()
         u = urllib.parse.urlparse(self.path)
         if u.path == "/api/thumb":
             name = (urllib.parse.parse_qs(u.query).get("name") or [None])[0]
