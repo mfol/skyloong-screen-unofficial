@@ -13,7 +13,9 @@ dispositivo — sem build, sem servidor, sem dependências para instalar.
 ## Sumário
 
 - [O que é o dispositivo](#o-que-é-o-dispositivo)
+  - [Hardware testado](#hardware-testado)
 - [Como usar](#como-usar)
+  - [Configurar o Wi‑Fi pela tela (V4)](#configurar-o-wi-fi-pela-tela-v4)
 - [Funcionalidades](#funcionalidades)
 - [Solução de problemas](#solução-de-problemas)
 - [API do dispositivo (engenharia reversa)](#api-do-dispositivo-engenharia-reversa)
@@ -40,6 +42,17 @@ Características relevantes do servidor embarcado:
 | Conexões | **1 por vez** (`Connection: close`) — requisições precisam ser serializadas |
 | IP em modo estação | definido pela sua rede (ex.: `192.168.100.11`) |
 | IP em modo AP (fallback) | `192.168.4.1` (portal cativo em `/wifi`) |
+
+### Hardware testado
+
+Este projeto foi **testado** com o **SKYLOONG GK104 Pro** (Teclado Mecânico Sem Fio
+Bluetooth, full‑size 100%, retroiluminação RGB, keycaps PBT, switches hot‑swap de baixo
+ruído), com a **versão da tela na 4.0**.
+
+> 💡 **Outras versões de tela:** a configuração de Wi‑Fi pela própria tela
+> (veja [Configurar o Wi‑Fi pela tela](#configurar-o-wi-fi-pela-tela-v4)) e este console
+> **talvez funcionem em telas mais antigas** (ex.: a 3.0). **Não tenho como testar**, pois só
+> possuo a **4.0** — se você testar em outra versão, abra uma _issue_ contando o resultado.
 
 ---
 
@@ -72,6 +85,25 @@ Características relevantes do servidor embarcado:
 > "conteúdo misto" (mixed content). Use `http://` (localhost) ou, no limite, `file://`.
 
 O endereço informado fica salvo no `localStorage` para as próximas aberturas.
+
+### Configurar o Wi‑Fi pela tela (V4)
+
+Antes de conseguir falar com o teclado pela rede, ele precisa estar **conectado ao seu
+Wi‑Fi**. Isso é feito **direto na telinha do teclado**, sem PC:
+
+1. **Abra o menu da tela:** pressione e segure ao mesmo tempo **FN + Menu** (teclas à direita
+   do **FN**, ou entre **FN** e **Ctrl**) por **pelo menos ~3 segundos**, com a tela LCD montada/ligada.
+2. No primeiro item, pressione **Enter** no botão de **digitalização (scan)** para procurar redes Wi‑Fi.
+3. Selecione sua rede e **digite a senha** usando as **setas** (para escolher caracteres) e **Enter** (para confirmar).
+4. Depois de conectar, pressione a **seta para baixo** algumas vezes até ver a seção **Servidor Web** — ali aparece o **endereço IP** do teclado (ex.: `192.168.xx.yy`).
+5. Use esse IP no campo do topo deste console (ou na barra de endereço do navegador) para acessar o teclado.
+
+> Em algumas versões da tela, para **exibir** uma foto/vídeo enviado basta pressionar **FN + a
+> tecla** correspondente na própria tela.
+
+> 🙏 **Créditos:** o passo a passo de configuração do Wi‑Fi pela tela foi baseado no relato do
+> usuário **AliExpress Shopper** (avaliação de 04/jul/2025) no anúncio do produto:
+> <https://pt.aliexpress.com/item/1005006890321000.html>. Obrigado por documentar o processo!
 
 ---
 
