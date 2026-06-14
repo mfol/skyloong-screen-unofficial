@@ -1,5 +1,7 @@
 # SKYLOONG 4.0 Screen — Console Web (não oficial)
 
+**🌐 Idioma / Language:** **Português** · [English](README.en.md)
+
 Frontend alternativo, em **um único arquivo HTML**, para o teclado **SKYLOONG 4.0 Screen**
 (teclado com tela LCD embutida e Wi‑Fi). Substitui a interface de fábrica servida pelo
 próprio teclado em `http://<ip-do-teclado>/`, falando **diretamente** com a API HTTP do
@@ -40,7 +42,7 @@ Características relevantes do servidor embarcado:
 | Armazenamento | ~**5,8 MB** (`total` ≈ 6.094.848 bytes) |
 | CORS | aberto (`Access-Control-Allow-Origin: *`) |
 | Conexões | **1 por vez** (`Connection: close`) — requisições precisam ser serializadas |
-| IP em modo estação | definido pela sua rede (ex.: `192.168.100.11`) |
+| IP em modo estação | definido pela sua rede (ex.: `192.168.100.11` — só exemplo; o seu será diferente) |
 | IP em modo AP (fallback) | `192.168.4.1` (portal cativo em `/wifi`) |
 
 ### Hardware testado
@@ -59,7 +61,10 @@ ruído), com a **versão da tela na 4.0**.
 ## Como usar
 
 1. Garanta que seu PC está na **mesma rede Wi‑Fi** que o teclado.
-2. Descubra o IP do teclado (aparece na própria tela / no roteador). Padrão deste projeto: `192.168.100.11`.
+2. Descubra o IP do teclado (aparece na própria tela / no roteador). O valor `192.168.100.11`
+   que aparece neste projeto é **só um exemplo** (foi o IP que a rede do autor atribuiu) — **o
+   seu será diferente**. Veja [Configurar o Wi‑Fi pela tela](#configurar-o-wi-fi-pela-tela-v4)
+   para descobrir o seu na seção **Servidor Web** da tela.
 3. **Sirva a página por `http://`** (recomendado) — dê **duplo clique em `serve.bat`**.
    Ele inicia o `server.py` (que habilita o **banco SQLite** de miniaturas/apelidos) e abre
    `http://localhost:8000/skyloong-ui.html` no navegador.
@@ -287,7 +292,8 @@ skyloong/
 ├── server.py             ← servidor local + API de thumbnails em SQLite (stdlib)
 ├── serve.bat             ← inicia o server.py e abre o navegador (recomendado)
 ├── thumbnails.sqlite     ← banco gerado em runtime (ignorado pelo git)
-├── README.md             ← este documento
+├── README.md             ← este documento (português)
+├── README.en.md          ← versão em inglês
 └── reverse/              ← artefatos da engenharia reversa (referência)
     ├── index.js          ← bundle original do teclado (minificado)
     ├── index.pretty.js   ← mesmo bundle, formatado (legível)
@@ -303,7 +309,8 @@ skyloong/
 - **Sem build / sem dependências**: HTML + CSS + JS _vanilla_ (ES modules nativos do navegador).
 - **Tema escuro**, responsivo, com notificações (toasts) e drag‑and‑drop.
 - O IP base é detectado automaticamente quando a página é **servida pelo próprio teclado**
-  (mesma origem); caso contrário usa o IP configurado (padrão `192.168.100.11`).
+  (mesma origem); caso contrário usa o IP que você configurar no topo da página (o
+  `192.168.100.11` que aparece pré‑preenchido é **só um exemplo** — troque pelo seu).
 - Possível evolução: **hospedar este HTML no próprio teclado** (via `POST /edit`) para
   substituir a UI de fábrica e rodar tudo _same-origin_ — porém é arriscado (pode quebrar a
   interface original) e deve ser feito com cautela/backup.
