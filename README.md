@@ -279,4 +279,11 @@ skyloong/
 ---
 
 ### Licença
-Uso pessoal/educacional. "SKYLOONG" é marca de seus respectivos donos; este projeto não é oficial.
+
+Distribuído sob a licença **MIT** — veja [LICENSE](LICENSE).
+
+O software é fornecido **"COMO ESTÁ", sem garantia**, e o autor **não assume
+nenhuma responsabilidade** por danos, perdas ou inutilização do dispositivo
+decorrentes do uso. Use por sua conta e risco, apenas no seu próprio aparelho.
+"SKYLOONG" é marca de seus respectivos donos; este projeto é independente e
+**não oficial**.
