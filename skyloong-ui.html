@@ -92,6 +92,8 @@
   textarea.t{resize:vertical;min-height:74px}
   /* gallery */
   .gal{display:grid;grid-template-columns:repeat(auto-fill,minmax(170px,1fr));gap:14px}
+  @media(max-width:520px){.gal{grid-template-columns:repeat(2,1fr);gap:10px}.main{padding:16px 14px 50px}
+    .topbar .conn{margin-left:0;width:100%}.topbar .conn input{flex:1;width:auto}}
   .thumb{background:var(--panel2);border:1px solid var(--line);border-radius:12px;overflow:hidden;position:relative;transition:.15s}
   .thumb:hover{border-color:var(--acc);transform:translateY(-2px)}
   .thumb .img{aspect-ratio:4/3;background:#0a0c16 center/cover no-repeat;display:grid;place-items:center}
@@ -101,6 +103,15 @@
   .thumb .meta .sz{color:var(--mut);margin-top:2px}
   .thumb .acts{display:flex;gap:6px;padding:0 10px 10px}
   .thumb .acts .btn{flex:1;justify-content:center;padding:6px}
+  .thumb .meta .lbl{width:100%;background:transparent;border:1px solid transparent;color:var(--txt);
+    font:inherit;font-weight:600;font-size:13px;padding:3px 6px;border-radius:6px;margin:-2px 0 3px -6px;transition:.12s}
+  .thumb .meta .lbl::placeholder{color:var(--mut);font-weight:400;font-style:italic}
+  .thumb .meta .lbl:hover{border-color:var(--line)}
+  .thumb .meta .lbl:focus{outline:none;border-color:var(--acc);background:#0c0e1a}
+  .thumb .play{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);width:44px;height:44px;
+    border-radius:50%;background:rgba(0,0,0,.5);display:grid;place-items:center;pointer-events:none;backdrop-filter:blur(2px)}
+  .thumb .play svg{width:20px;height:20px;color:#fff;margin-left:2px}
+  .dbtag{font-size:10px;padding:1px 7px;border-radius:99px;background:rgba(0,224,198,.15);color:var(--acc2);font-weight:700}
   .badge-active{position:absolute;top:8px;left:8px;background:var(--acc2);color:#04201d;font-size:10px;font-weight:700;
     padding:3px 8px;border-radius:99px;box-shadow:0 4px 12px -4px var(--acc2)}
   /* dropzone */
@@ -239,10 +250,37 @@ const isImg = n => /\.(jpe?g|png|gif|bmp|webp)$/i.test(n);
 const isVid = n => /\.(mpe?g)$/i.test(n);
 const isSnd = n => /\.(wav|mp3)$/i.test(n);
 
-/* cache local de thumbnails (device não devolve arquivos) */
-const THUMBS = JSON.parse(localStorage.getItem('sky_thumbs')||'{}');
-function cacheThumb(name, dataUrl){ try{ THUMBS[name]=dataUrl; localStorage.setItem('sky_thumbs', JSON.stringify(THUMBS)); }catch{} }
-function dropThumb(name){ delete THUMBS[name]; localStorage.setItem('sky_thumbs', JSON.stringify(THUMBS)); }
+const cleanName = fn => String(fn||'').replace(/\.[^.]+$/,'').slice(0,40);
+
+/* ---------- meta store: miniatura + apelido de cada arquivo ----------
+   O device salva tudo como número (ex.: 1781402560644.mpeg) e não devolve o conteúdo.
+   Guardamos {thumb,label,type,size} por arquivo: em SQLite (server.py) quando disponível,
+   senão no localStorage. Assim dá pra saber "quem é quem". */
+const THUMB_BASE = location.protocol.startsWith('http') ? location.origin : null;
+let dbOnline = false;
+let META = {};                                   // name -> {thumb,label,type,size,ts}
+const thumbOf = n => META[n] && META[n].thumb;
+const labelOf = n => (META[n] && META[n].label) || '';
+function persistLocal(){ try{ localStorage.setItem('sky_meta', JSON.stringify(META)); }catch{} }
+async function loadMeta(){
+  if(THUMB_BASE){
+    try{ const r=await fetch(THUMB_BASE+'/api/thumbs',{cache:'no-store'}); if(r.ok){ META=await r.json(); dbOnline=true; return; } }catch{}
+  }
+  dbOnline=false;
+  META = JSON.parse(localStorage.getItem('sky_meta')||'null') || {};
+  const old = JSON.parse(localStorage.getItem('sky_thumbs')||'null');   // migra formato antigo
+  if(old){ for(const k in old){ META[k]=META[k]||{thumb:old[k]}; } persistLocal(); localStorage.removeItem('sky_thumbs'); }
+}
+async function saveMeta(name, data){             // data parcial: {thumb?,label?,type?,size?}
+  META[name] = Object.assign({}, META[name], data, {ts:Date.now()});
+  if(dbOnline){ try{ const r=await fetch(THUMB_BASE+'/api/thumb',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(Object.assign({name},META[name]))}); if(r.ok) return; }catch{} dbOnline=false; }
+  persistLocal();
+}
+async function removeMeta(name){
+  delete META[name];
+  if(dbOnline){ try{ const r=await fetch(THUMB_BASE+'/api/thumb?name='+encodeURIComponent(name),{method:'DELETE'}); if(r.ok) return; }catch{} dbOnline=false; }
+  persistLocal();
+}
 
 /* ---------- core data load ---------- */
 async function loadInfo(){ info = await apiGet('/info', {signal: AbortSignal.timeout(5000)}); return info; }
@@ -288,8 +326,10 @@ function setOnline(v){
   online = v;
   document.querySelectorAll('#dot,#dot2').forEach(d=>{d.className='dot '+(v?'on':'off')});
   document.getElementById('connTxt').textContent = v ? (info.ip||BASE) : 'offline';
+  const dbtag = dbOnline ? ' <span class="dbtag">SQLite</span>' : '';
   document.getElementById('footInfo').innerHTML = v && info.ssid
-    ? `Rede: <b>${esc(info.ssid)}</b><br>${fmtBytes(storage.used)} / ${fmtBytes(storage.total)}` : '';
+    ? `Rede: <b>${esc(info.ssid)}</b>${dbtag}<br>${fmtBytes(storage.used)} / ${fmtBytes(storage.total)}`
+    : (dbOnline?'<span class="dbtag">SQLite conectado</span>':'');
 }
 async function connect(){
   const h = document.getElementById('host').value.trim();
@@ -339,8 +379,9 @@ RENDER.dash = ()=>{
       </div>
       <div class="bar"><i style="width:${pct}%"></i></div>
       <div style="margin-top:18px" class="muted">Imagem ativa</div>
-      <div class="screen-prev" style="margin-top:8px;${active&&THUMBS[active]?`background-image:url(${THUMBS[active]})`:''}">
-        ${active? (THUMBS[active]?'':'📺 '+esc(active)) : 'nenhuma'}</div>
+      <div class="screen-prev" style="margin-top:8px;${active&&thumbOf(active)?`background-image:url(${thumbOf(active)})`:''}">
+        ${active? (thumbOf(active)?'':'📺') : 'nenhuma'}</div>
+      ${active?`<div class="muted" style="text-align:center;margin-top:6px;font-size:12px">${esc(labelOf(active)||active)}</div>`:''}
       <button class="btn ghost sm" style="margin-top:14px;width:100%" id="refreshDash">${svg(ICON.refresh)} Atualizar</button>
     </div>
   </div>`;
@@ -392,13 +433,16 @@ RENDER.img = ()=>{
 };
 function galCell(f){
   const active = f.name===info.jpg_file;
-  const th = THUMBS[f.name];
+  const th = thumbOf(f.name), label = labelOf(f.name);
   return `<div class="thumb" data-n="${esc(f.name)}">
     ${active?'<div class="badge-active">NA TELA</div>':''}
     <div class="img" style="${th?`background-image:url(${th})`:''}">
-      ${th?'':`<div class="ph"><span style="font-size:22px">🖼️</span>${esc(f.name)}</div>`}
+      ${th?'':`<div class="ph"><span style="font-size:26px">🖼️</span><span>sem prévia</span></div>`}
     </div>
-    <div class="meta"><div class="nm">${esc(f.name)}</div><div class="sz">${fmtBytes(f.size)}</div></div>
+    <div class="meta">
+      <input class="lbl" value="${esc(label)}" placeholder="dar um nome…" title="apelido — clique para renomear">
+      <div class="sz">${esc(f.name)} · ${fmtBytes(f.size)}</div>
+    </div>
     <div class="acts">
       <button class="btn sm setActive">Exibir</button>
       <button class="btn sm danger del">${svg(ICON.trash)}</button>
@@ -432,8 +476,10 @@ function bindImg(mode, roll){
   // gallery acts
   view().querySelectorAll('.thumb').forEach(t=>{
     const name=t.dataset.n;
+    const lbl=t.querySelector('.lbl');
+    if(lbl) lbl.onchange=()=>{ saveMeta(name,{label:lbl.value.trim()}); toast('Nome salvo','ok',1200); };
     t.querySelector('.setActive').onclick=async()=>{
-      try{ await postJpg({jpg_file:name, jpg_mode:'fixed'}); info.jpg_file=name; info.jpg_mode='fixed'; RENDER.img(); toast('Exibindo '+name,'ok'); }
+      try{ await postJpg({jpg_file:name, jpg_mode:'fixed'}); info.jpg_file=name; info.jpg_mode='fixed'; RENDER.img(); toast('Exibindo '+(labelOf(name)||name),'ok'); }
       catch(e){ toast('Erro: '+e.message,'err'); }
     };
     t.querySelector('.del').onclick=()=>delFile(name, ()=>RENDER.img());
@@ -450,7 +496,7 @@ async function handleImgFiles(list){
       const name = Date.now()+'.jpg';
       const fd=new FormData(); fd.append('data', new File([blob], name, {type:'image/jpeg'}));
       await apiPost('/edit', fd);
-      cacheThumb(name, dataUrl);
+      await saveMeta(name, {thumb:dataUrl, type:'image', size:blob.size, label:cleanName(file.name)});
       prog.querySelector('i').style.width='100%';
       toast('Enviado: '+name,'ok');
     }catch(e){ toast('Falha no upload: '+e.message,'err',4000); }
@@ -473,6 +519,42 @@ function imageToScreenJpeg(file){
     img.onerror=()=>rej(new Error('imagem inválida'));
     img.src=URL.createObjectURL(file);
   });
+}
+/* desenha uma fonte (img/video) num canvas 320×240 (cover) e devolve dataURL jpeg */
+function coverCanvas(src, sw, sh){
+  const c=document.createElement('canvas'); c.width=SCREEN_W; c.height=SCREEN_H;
+  const ctx=c.getContext('2d'); ctx.fillStyle='#000'; ctx.fillRect(0,0,SCREEN_W,SCREEN_H);
+  if(sw&&sh){ const s=Math.max(SCREEN_W/sw,SCREEN_H/sh), w=sw*s, h=sh*s; ctx.drawImage(src,(SCREEN_W-w)/2,(SCREEN_H-h)/2,w,h); }
+  return c.toDataURL('image/jpeg',0.7);
+}
+/* miniatura a partir do arquivo de origem (1º quadro p/ vídeo/GIF) */
+function mediaThumb(file){
+  return new Promise((res,rej)=>{
+    if(file.type.startsWith('image/')){
+      const img=new Image();
+      img.onload=()=>{ res(coverCanvas(img,img.naturalWidth,img.naturalHeight)); URL.revokeObjectURL(img.src); };
+      img.onerror=()=>rej(new Error('img')); img.src=URL.createObjectURL(file); return;
+    }
+    const v=document.createElement('video'); v.muted=true; v.playsInline=true; v.preload='auto';
+    const done=()=>{ try{ res(coverCanvas(v,v.videoWidth,v.videoHeight)); }catch(e){ rej(e); } URL.revokeObjectURL(v.src); };
+    v.onloadeddata=()=>{ try{ v.currentTime=Math.min(0.2,(v.duration||1)/3); }catch{ done(); } };
+    v.onseeked=done; v.onerror=()=>rej(new Error('video')); v.src=URL.createObjectURL(file);
+  });
+}
+function vidCell(f){
+  const th=thumbOf(f.name), label=labelOf(f.name);
+  return `<div class="thumb" data-n="${esc(f.name)}">
+    <div class="img" style="${th?`background-image:url(${th})`:''}">
+      ${th?'':`<div class="ph"><span style="font-size:26px">🎞️</span><span>sem prévia</span></div>`}
+      <div class="play">${svg(ICON.play)}</div>
+    </div>
+    <div class="meta">
+      <input class="lbl" value="${esc(label)}" placeholder="dar um nome…" title="apelido — clique para renomear">
+      <div class="sz">${esc(f.name)} · ${fmtBytes(f.size)}</div>
+    </div>
+    <div class="acts">
+      <button class="btn sm danger del" style="flex:1;justify-content:center">${svg(ICON.trash)} Apagar</button>
+    </div></div>`;
 }
 async function postJpg(over={}){
   const e = over.enable ?? info.jpg_enable;
@@ -510,11 +592,7 @@ RENDER.vid = ()=>{
   </div>
   <div class="card">
     <h3>${svg(ICON.vid)} Vídeos na memória · ${vids.length}</h3>
-    ${vids.length? `<div id="vlist">${vids.map(f=>`
-      <div class="row" data-n="${esc(f.name)}">
-        <div><div class="t">🎞️ ${esc(f.name)}</div><div class="d">${fmtBytes(f.size)}</div></div>
-        <button class="btn sm danger del">${svg(ICON.trash)} Apagar</button>
-      </div>`).join('')}</div>`
+    ${vids.length? `<div class="gal" id="vgal">${vids.map(vidCell).join('')}</div>`
       : `<div class="muted" style="padding:20px;text-align:center">Nenhum vídeo na memória.</div>`}
   </div>`;
   // binds
@@ -528,8 +606,11 @@ RENDER.vid = ()=>{
     const nv=!info.gif_enable; await apiPost(`/config_app_gif?enable=${nv}`); info.gif_enable=nv; e.target.classList.toggle('on',nv);
     toast('Vídeo/GIF '+(nv?'ligado':'desligado'),'ok');
   };
-  view().querySelectorAll('#vlist .row').forEach(r=>{
-    r.querySelector('.del').onclick=()=>delFile(r.dataset.n, ()=>RENDER.vid());
+  view().querySelectorAll('#vgal .thumb').forEach(t=>{
+    const name=t.dataset.n;
+    const lbl=t.querySelector('.lbl');
+    if(lbl) lbl.onchange=()=>{ saveMeta(name,{label:lbl.value.trim()}); toast('Nome salvo','ok',1200); };
+    t.querySelector('.del').onclick=()=>delFile(name, ()=>RENDER.vid());
   });
 };
 // fetch segue redirects internamente e devolve um blob: same-origin.
@@ -573,6 +654,7 @@ async function loadFFmpeg(){
 async function handleVideo(file){
   const free = storage.total-storage.used;
   const stat=(t)=>document.getElementById('vstatus').textContent=t;
+  const thumbP = mediaThumb(file).catch(()=>null);   // 1º quadro do arquivo original
   try{
     const ff=await loadFFmpeg();
     stat('Convertendo "'+file.name+'"…');
@@ -587,6 +669,7 @@ async function handleVideo(file){
     const fd=new FormData(); fd.append('data', new File([blob], name, {type:'video/mpeg'}));
     stat('Enviando '+name+' ('+fmtBytes(blob.size)+')…');
     await apiPost('/edit', fd);
+    await saveMeta(name, {thumb: await thumbP, type: file.type.includes('gif')?'gif':'video', size: blob.size, label: cleanName(file.name)});
     toast('Vídeo enviado: '+name,'ok'); stat('');
     document.getElementById('vprog').classList.add('hide');
     await loadFiles(); RENDER.vid();
@@ -736,7 +819,7 @@ function offlineCard(){ return `<div class="card" style="text-align:center;paddi
 function bindOffline(){ const b=document.getElementById('retry'); if(b)b.onclick=connect; }
 async function delFile(name, after){
   if(!confirm('Apagar "'+name+'" do teclado?')) return;
-  try{ await apiDelete('/edit?filename=/'+encodeURIComponent(name)); dropThumb(name); toast('Apagado: '+name,'ok'); await loadFiles(); after&&after(); }
+  try{ await apiDelete('/edit?filename=/'+encodeURIComponent(name)); await removeMeta(name); toast('Apagado: '+name,'ok'); await loadFiles(); after&&after(); }
   catch(e){ toast('Erro ao apagar: '+e.message,'err'); }
 }
 
@@ -747,9 +830,9 @@ document.getElementById('host').value = BASE.replace(/^https?:\/\//,'') || locat
 document.getElementById('connectBtn').onclick = connect;
 document.getElementById('host').addEventListener('keydown',e=>{if(e.key==='Enter')connect();});
 buildNav();
-go('dash');
 setOnline(false);
-connect();
+go('dash');
+(async()=>{ await loadMeta(); go('dash'); await connect(); })();
 // heartbeat
 setInterval(async()=>{ try{ await loadInfo(); if(!online){ await loadFiles(); setOnline(true); RENDER[current](); } else setOnline(true);}catch{ if(online){ setOnline(false);} } }, 8000);
 </script>

@@ -48,12 +48,17 @@ Características relevantes do servidor embarcado:
 1. Garanta que seu PC está na **mesma rede Wi‑Fi** que o teclado.
 2. Descubra o IP do teclado (aparece na própria tela / no roteador). Padrão deste projeto: `192.168.100.11`.
 3. **Sirva a página por `http://`** (recomendado) — dê **duplo clique em `serve.bat`**.
-   Ele sobe um servidor local e abre `http://localhost:8000/skyloong-ui.html` no navegador.
+   Ele inicia o `server.py` (que habilita o **banco SQLite** de miniaturas/apelidos) e abre
+   `http://localhost:8000/skyloong-ui.html` no navegador.
    Alternativa manual, na pasta do projeto:
    ```bash
-   python -m http.server 8000
+   python server.py            # com banco SQLite (recomendado)
+   # ou, sem banco (miniaturas só no navegador):
+   # python -m http.server 8000
    # depois abra http://localhost:8000/skyloong-ui.html
    ```
+   > Dica: o servidor escuta em `0.0.0.0`, então dá pra abrir do **celular** na mesma rede:
+   > `http://<ip-do-pc>:8000/skyloong-ui.html`.
 4. No topo da página, ajuste o **IP** do teclado se necessário e clique em **Conectar**.
 
 > ### Por que não abrir o arquivo direto (`file://`)?
@@ -74,9 +79,9 @@ O endereço informado fica salvo no `localStorage` para as próximas aberturas.
 
 | Aba | O que faz |
 |---|---|
-| **Dashboard** | Estado do dispositivo (IP, SSID, fuso, idioma), status de cada widget, **barra de uso de memória** e prévia da imagem ativa. |
-| **Imagens** | Upload com **reescala automática para 320×240 JPEG** (corte _cover_, centralizado); galeria com miniaturas; alternar **Imagem fixa ↔ Slideshow**; ajustar o **intervalo** (2–12 s); ligar/desligar; definir qual imagem aparece na tela; apagar. |
-| **Vídeo / GIF** | Upload de vídeo (mp4/webm/mkv/avi) ou GIF, **convertido no próprio navegador** (ffmpeg.wasm) para o formato da tela; lista e remoção de vídeos; liga/desliga o app de vídeo. |
+| **Dashboard** | Estado do dispositivo (IP, SSID, fuso, idioma), status de cada widget, **barra de uso de memória** e prévia (com apelido) da imagem ativa. |
+| **Imagens** | Upload com **reescala automática para 320×240 JPEG** (corte _cover_, centralizado); galeria com **miniatura + apelido editável** por arquivo; alternar **Imagem fixa ↔ Slideshow**; ajustar o **intervalo** (2–12 s); ligar/desligar; definir qual imagem aparece na tela; apagar. |
+| **Vídeo / GIF** | Upload de vídeo (mp4/webm/mkv/avi) ou GIF, **convertido no próprio navegador** (ffmpeg.wasm) para o formato da tela; galeria com **miniatura (1º quadro) + apelido**; remoção; liga/desliga o app de vídeo. |
 | **Apps da Tela** | Toggles dos widgets exibidos no teclado: **Clima**, **APS** (velocidade de digitação), **Info do sistema** (CPU/RAM), **Vídeo/GIF** e **Slideshow**. |
 | **WiFi** | Escaneia redes próximas (com **força de sinal**) e envia novas credenciais para o teclado. |
 | **Configurações** | **Tema** (0/1/2), **fuso horário**, **cidade** + **chave da API de clima** e **texto personalizado** exibido na tela. |
@@ -85,9 +90,12 @@ Detalhes de robustez:
 
 - **Fila serial de requisições** — respeita o limite de 1 conexão do servidor embarcado.
 - **Heartbeat** a cada 8 s — detecta queda/volta da conexão e reconecta sozinho.
-- **Cache local de miniaturas** — o dispositivo **não devolve** os arquivos enviados
-  (veja abaixo), então as miniaturas mostradas são as das imagens enviadas **por este navegador**
-  (guardadas em `localStorage`). Arquivos enviados de outro lugar aparecem com um ícone genérico.
+- **Miniaturas + apelidos em SQLite** — o teclado salva tudo com nome numérico
+  (ex.: `1781402560644.mpeg`) e **não devolve** o conteúdo dos arquivos. Para você saber
+  "quem é quem", o `server.py` guarda, por arquivo, uma **miniatura** e um **apelido** em um
+  banco **SQLite** (veja [Banco de thumbnails](#banco-de-thumbnails-sqlite)). Ao **apagar** um
+  arquivo no teclado, o registro é removido do banco junto. Sem o `server.py` (ex.: aberto via
+  `file://`), cai para `localStorage` automaticamente.
 
 ---
 
@@ -177,12 +185,52 @@ ffmpeg -i input \
 
 ---
 
+## Banco de thumbnails (SQLite)
+
+O `server.py` usa **apenas a biblioteca padrão do Python** (`http.server` + `sqlite3`) — **nada
+para instalar**. Ele serve os arquivos estáticos **e** expõe uma pequena API para guardar, por
+arquivo do teclado, uma **miniatura** (data URL JPEG) e um **apelido**. Assim a galeria deixa de
+mostrar só `1781402560644.mpeg` e passa a mostrar a imagem + o nome que você deu.
+
+**Banco:** `thumbnails.sqlite` (criado ao lado do `server.py`, em modo WAL). Não vai pro git.
+
+**Tabela:**
+
+```sql
+CREATE TABLE thumbs(
+  name  TEXT PRIMARY KEY,  -- nome do arquivo no teclado (ex.: 1781402560644.mpeg)
+  label TEXT,              -- apelido definido por você
+  type  TEXT,              -- image | video | gif
+  size  INTEGER,           -- bytes
+  thumb TEXT,              -- miniatura em data URL (JPEG)
+  ts    INTEGER            -- timestamp da última atualização
+);
+```
+
+**API (mesma origem da página):**
+
+| Método | Endpoint | Função |
+|---|---|---|
+| `GET` | `/api/health` | checagem (`{"ok":true}`) — o frontend usa para detectar o banco |
+| `GET` | `/api/thumbs` | devolve `{ "<name>": {label,type,size,thumb,ts}, ... }` |
+| `PUT`/`POST` | `/api/thumb` | upsert `{name, label?, type?, size?, thumb?}` (campos ausentes são preservados) |
+| `DELETE` | `/api/thumb?name=...` | remove o registro |
+
+**Sincronização:** ao enviar uma imagem/vídeo, o frontend gera a miniatura e faz `PUT`; ao
+**apagar** o arquivo no teclado, faz `DELETE`. Renomear (editar o apelido na galeria) faz um
+`PUT` só com o `label`. Se o `server.py` não estiver no ar (ex.: página aberta via `file://`),
+tudo isso cai para o `localStorage` do navegador — sem erro.
+
+---
+
 ## Estrutura do projeto
 
 ```
 skyloong/
 ├── skyloong-ui.html      ← o console (a página principal)
-├── serve.bat             ← sobe servidor local e abre o navegador (recomendado)
+├── server.py             ← servidor local + API de thumbnails em SQLite (stdlib)
+├── serve.bat             ← inicia o server.py e abre o navegador (recomendado)
+├── thumbnails.sqlite     ← banco gerado em runtime (ignorado pelo git)
 ├── README.md             ← este documento
 └── reverse/              ← artefatos da engenharia reversa (referência)
     ├── index.js          ← bundle original do teclado (minificado)

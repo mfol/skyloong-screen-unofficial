@@ -1,5 +1,14 @@
 # binário grande baixado durante a engenharia reversa (amostra de vídeo do device)
 reverse/sample.mpeg
 
+# banco de thumbnails/apelidos gerado em runtime pelo server.py
+thumbnails.sqlite
+thumbnails.sqlite-wal
+thumbnails.sqlite-shm
+
+# saidas temporarias de teste
+reverse/srv.out
+reverse/srv.err
+
 # config local do Claude Code
 .claude/

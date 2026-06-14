@@ -19,12 +19,15 @@ echo.
 REM abre o navegador na pagina ja servida
 start "" "%URL%"
 
-REM tenta python, depois py, depois node (http-server)
-where python >nul 2>nul && ( python -m http.server %PORT% & goto :end )
-where py     >nul 2>nul && ( py -m http.server %PORT%     & goto :end )
+REM Preferir server.py (Python) -> habilita o banco SQLite de thumbnails/apelidos.
+where python >nul 2>nul && ( python "%~dp0server.py" & goto :end )
+where py     >nul 2>nul && ( py "%~dp0server.py"     & goto :end )
+
+REM Sem Python: cai para servidor estatico simples (sem banco; usa cache do navegador).
+echo  Python nao encontrado: rodando sem banco SQLite (thumbnails ficam so no navegador).
 where npx    >nul 2>nul && ( npx --yes http-server -p %PORT% & goto :end )
 
-echo  Nenhum servidor encontrado. Instale Python ou Node.js.
+echo  Nenhum servidor encontrado. Instale Python (recomendado) ou Node.js.
 pause
 :end
 endlocal
