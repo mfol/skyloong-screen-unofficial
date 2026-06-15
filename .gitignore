@@ -10,5 +10,11 @@ thumbnails.sqlite-shm
 reverse/srv.out
 reverse/srv.err
 
+# log capturado do console serial do ESP32-S3 (COM6)
+reverse/com6.log
+
+# cache do Python
+__pycache__/
+
 # config local do Claude Code
 .claude/

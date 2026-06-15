@@ -21,6 +21,8 @@ dispositivo — sem build, sem servidor, sem dependências para instalar.
 - [Funcionalidades](#funcionalidades)
 - [Solução de problemas](#solução-de-problemas)
 - [API do dispositivo (engenharia reversa)](#api-do-dispositivo-engenharia-reversa)
+- [Por dentro: ESP32‑S3 e console serial](#por-dentro-esp32s3-e-console-serial)
+  - [Trocar feature da tela pela serial](#trocar-feature-da-tela-pela-serial)
 - [Como a conversão de vídeo funciona](#como-a-conversão-de-vídeo-funciona)
 - [Estrutura do projeto](#estrutura-do-projeto)
 - [Notas técnicas](#notas-técnicas)
@@ -122,6 +124,7 @@ Wi‑Fi**. Isso é feito **direto na telinha do teclado**, sem PC:
 | **Apps da Tela** | Toggles dos widgets exibidos no teclado: **Clima**, **APS** (velocidade de digitação), **Info do sistema** (CPU/RAM), **Vídeo/GIF** e **Slideshow**. |
 | **WiFi** | Escaneia redes próximas (com **força de sinal**) e envia novas credenciais para o teclado. |
 | **Configurações** | **Tema** (0/1/2), **fuso horário**, **cidade** + **chave da API de clima** e **texto personalizado** exibido na tela. |
+| **Trocar feature (serial)** | Botão na barra de conexão que **avança a tela para a próxima funcionalidade** (GIF, relógio, clima, APS, QR/Wi‑Fi…) por um comando na **porta serial (COM)** da tela. Útil até para **ligar o Wi‑Fi** (basta navegar até a tela do QR). Veja [Por dentro: ESP32‑S3 e console serial](#por-dentro-esp32s3-e-console-serial). |
 
 Detalhes de robustez:
 
@@ -214,6 +217,72 @@ Base = `http://<ip>`. Todos os caminhos são relativos ao IP do teclado.
 
 ---
 
+## Por dentro: ESP32‑S3 e console serial
+
+Investigando o teclado pela **porta USB serial** descobrimos como a tela funciona por dentro
+— e isso abriu um **canal de controle novo**, que não depende da rede.
+
+### A "telinha" é um módulo ESP32‑S3 destacável
+
+- A tela é um **módulo independente** que encaixa no teclado por **12 pinos dourados** (pogo):
+  **alimentação + um link UART** entre o teclado e a tela.
+- **O Wi‑Fi está na TELA**, não no teclado. O cérebro dela é um **ESP32‑S3** (8 MB de PSRAM,
+  codec de áudio ES8311) — é ele que roda o servidor HTTP, os GIFs, o relógio, os widgets, etc.
+  O teclado em si é só a matriz de teclas, com seu próprio chip.
+- A tela tem uma **USB‑C própria**. Plugada no PC, ela aparece como uma **porta serial**
+  (ex.: `COM6`): `USB\VID_303A&PID_1001` = o **USB‑Serial‑JTAG** embutido do ESP32‑S3.
+
+### Firmware open‑source
+
+O firmware da tela é **aberto**: <https://github.com/JZ-Skyloong/esp32_screen_module>
+(ESP‑IDF + Arduino + LVGL, sistema de arquivos **LittleFS**, projeto `GK87‑Screen`). Foi lendo
+esse código que confirmamos os detalhes abaixo — inclusive que **os arquivos de mídia ficam em
+`/littlefs/<número>.mpeg`** (o tal "nome numérico").
+
+### O console serial é também um controle remoto da tela
+
+A porta serial (115200 8N1) cospe os **logs do ESP‑IDF** ao vivo (ótimo pra ver a tela conectar
+e qual IP ela pegou). Mas ela é **também um canal de entrada**: o firmware (tarefa
+`debug_USB_UART`) mapeia **um caractere → uma tecla** da interface — os mesmos comandos que o
+teclado manda pelos 12 pinos:
+
+| Caractere enviado | Ação na tela |
+|---|---|
+| `` ` `` (crase) | **troca de app/feature** (GIF → relógio → clima → APS → QR/Wi‑Fi → …) |
+| `/` | entra/sai do **modo Configuração** |
+| `w` `a` `s` `d` | setas ↑ ← ↓ → |
+| `Enter` | confirmar / clicar |
+
+> ⚠️ **Só leitura/controle — nunca flashamos nada.** Abrir a porta **pode reiniciar** a tela
+> (comportamento do USB‑Serial‑JTAG), mas é inofensivo (só um reboot).
+
+Para **apenas monitorar** os logs: `reverse/serial-listen.ps1` (somente leitura; grava em
+`reverse/com6.log`). Uso: `pwsh -File reverse\serial-listen.ps1`.
+
+### Trocar feature da tela pela serial
+
+O console tem um botão **`↻ Trocar feature`** (na barra de conexão, ao lado de um campo de
+**porta COM**). Cada clique manda **um `` ` ``** pela serial e a tela **avança para a próxima
+funcionalidade**. Assim dá pra navegar entre as telas — inclusive chegar na **tela do QR**, que
+é o que **liga o Wi‑Fi** da tela.
+
+Como o **navegador não acessa porta COM**, quem fala com a serial é o **`server.py`** (via
+`serial-ctl.ps1`, usando `System.IO.Ports` do .NET — zero instalação). Endpoints:
+
+| Método | Endpoint | Função |
+|---|---|---|
+| `GET` | `/api/serial/ports` | lista as portas COM disponíveis |
+| `POST` | `/api/serial/switch` | manda **um `` ` ``** (troca de feature); responde `{ok, info}` com o app atual (ex.: `GIF`, `app 2`) |
+| `POST` | `/api/serial/force` | manda `` ` `` + `/` e lê o log tentando extrair o **IP** que a tela pegou na LAN |
+| `POST` | `/api/serial/exit` | manda `/` (sai do modo Configuração, sem reboot) |
+
+> 📌 **Requer a USB‑C da TELA plugada neste PC.** A porta `COMx` só existe quando a tela está
+> ligada ao PC por USB — se só o **teclado** estiver conectado, a COM da tela **não aparece**
+> (são dispositivos USB separados). O botão só é exibido quando o `server.py` responde em
+> `/api/serial/ports`. A porta escolhida fica salva no `localStorage`.
+
+---
+
 ## Como a conversão de vídeo funciona
 
 Igual à UI de fábrica: o vídeo é transcodificado **no navegador** com **ffmpeg.wasm** para
@@ -289,7 +358,8 @@ O frontend, quando detecta o servidor local, manda **todas** as chamadas do devi
 ```
 skyloong/
 ├── skyloong-ui.html      ← o console (a página principal)
-├── server.py             ← servidor local + API de thumbnails em SQLite (stdlib)
+├── server.py             ← servidor local + API de thumbnails (SQLite) + serial (stdlib)
+├── serial-ctl.ps1        ← controle da tela pela serial (COM) usado pelo server.py
 ├── serve.bat             ← inicia o server.py e abre o navegador (recomendado)
 ├── thumbnails.sqlite     ← banco gerado em runtime (ignorado pelo git)
 ├── README.md             ← este documento (português)
@@ -299,7 +369,8 @@ skyloong/
     ├── index.pretty.js   ← mesmo bundle, formatado (legível)
     ├── index.css         ← CSS original
     ├── ffmpeg.js         ← wrapper ESM do @ffmpeg/ffmpeg do teclado
-    └── dev-worker.js     ← worker do ffmpeg servido pelo teclado
+    ├── dev-worker.js     ← worker do ffmpeg servido pelo teclado
+    └── serial-listen.ps1 ← monitor (somente leitura) do console serial da tela
 ```
 
 ---

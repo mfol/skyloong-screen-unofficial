@@ -172,6 +172,11 @@
         <span class="dot" id="dot2"></span>
         <input id="host" placeholder="192.168.100.11">
         <button class="btn sm" id="connectBtn">Conectar</button>
+        <span id="serialWrap" style="display:none;align-items:center;gap:6px;white-space:nowrap">
+          <input id="serialPort" list="serialPorts" placeholder="COM6" title="Porta COM da tela (USB-C da tela plugada neste PC)." style="width:62px">
+          <datalist id="serialPorts"></datalist>
+          <button class="btn sm ghost" id="switchFeatBtn" title="Manda um comando pela serial que avança a tela pra próxima funcionalidade: GIF → relógio → clima → APS → QR/WiFi → … Cada clique = próxima. Requer a USB-C da tela neste PC e o serve.bat.">↻ Trocar feature</button>
+        </span>
       </div>
     </div>
     <div id="view"></div>
@@ -211,6 +216,7 @@ let info = {}, cfg = {}, files = [], storage = {used:0,total:0};
 let online = false;
 let PROXY = null;   // base do server.py local; quando presente, as chamadas ao device passam por ele
                     // (mesma origem ⇒ sem CORS/preflight ⇒ DELETE etc. funcionam)
+let SERIAL_PORT  = localStorage.getItem('sky_serial_port') || 'COM6';  // porta COM da tela (varia por PC)
 
 /* ---------- request queue (servidor embarcado = 1 conexão por vez) ---------- */
 let chain = Promise.resolve();
@@ -241,6 +247,30 @@ async function apiDelete(p){
     if(!r.ok) throw new Error(p+' → '+r.status);
     return r.text().catch(()=> '');
   });
+}
+
+/* ---------- serial: trocar a "feature"/app da tela pela COM (via server.py) ---------- */
+// A página (browser) não acessa COM; quem fala com a porta é o server.py (serial-ctl.ps1).
+// Cada chamada manda UM '`' (crase) = avança a tela pra próxima funcionalidade
+// (GIF → relógio → clima → APS → QR/WiFi → …). Funciona independente do WiFi.
+function serialReady(){ return !!THUMB_BASE; }            // precisa do server.py (mesma origem)
+async function serialPost(action, extra){
+  const r = await fetch(THUMB_BASE+'/api/serial/'+action, {
+    method:'POST', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify(Object.assign({port:SERIAL_PORT}, extra)) });
+  if(!r.ok) throw new Error('HTTP '+r.status);
+  return r.json();
+}
+async function switchFeature(){
+  if(!serialReady()){ toast('Precisa do server.py (rode pelo serve.bat)','err',4000); return; }
+  const btn=document.getElementById('switchFeatBtn'); if(!btn) return;
+  const old=btn.innerHTML; btn.disabled=true; btn.textContent='trocando…';
+  try{
+    const res=await serialPost('switch');
+    if(!res || !res.ok) throw new Error((res&&res.error) || 'falha');
+    toast('Feature trocada'+(res.info?(' → '+res.info):''),'ok');
+  }catch(e){ toast('Serial: '+e.message+' (USB-C da tela neste PC?)','err',5000); }
+  finally{ btn.disabled=false; btn.innerHTML=old; }
 }
 
 /* ---------- toast ---------- */
@@ -894,6 +924,21 @@ window.skyDebug = {
 document.getElementById('host').value = BASE.replace(/^https?:\/\//,'') || location.host;
 document.getElementById('connectBtn').onclick = connect;
 document.getElementById('host').addEventListener('keydown',e=>{if(e.key==='Enter')connect();});
+
+/* botão "Trocar feature": só aparece se o server.py responder /api/serial/ports */
+(function setupSerialUI(){
+  const wrap=document.getElementById('serialWrap'), pin=document.getElementById('serialPort'), btn=document.getElementById('switchFeatBtn');
+  if(!wrap || !THUMB_BASE) return;                 // file:// → sem serial
+  pin.value=SERIAL_PORT;
+  pin.onchange=()=>{ SERIAL_PORT=(pin.value.trim()||'COM6').toUpperCase(); localStorage.setItem('sky_serial_port', SERIAL_PORT); pin.value=SERIAL_PORT; };
+  btn.onclick=switchFeature;
+  fetch(THUMB_BASE+'/api/serial/ports',{cache:'no-store'})
+    .then(r=> r.ok ? r.json() : Promise.reject())
+    .then(d=>{ if(!d||!d.ok) throw 0;
+      wrap.style.display='inline-flex';
+      document.getElementById('serialPorts').innerHTML=(d.ports||[]).map(p=>`<option value="${esc(p)}">`).join('');
+    }).catch(()=>{ wrap.style.display='none'; });
+})();
 buildNav();
 setOnline(false);
 go('dash');

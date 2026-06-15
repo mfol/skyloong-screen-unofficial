@@ -21,6 +21,8 @@ no build, no server, no dependencies to install.
 - [Features](#features)
 - [Troubleshooting](#troubleshooting)
 - [Device API (reverse-engineered)](#device-api-reverse-engineered)
+- [Inside: ESP32‑S3 and serial console](#inside-esp32s3-and-serial-console)
+  - [Switch the screen feature over serial](#switch-the-screen-feature-over-serial)
 - [How video conversion works](#how-video-conversion-works)
 - [Project structure](#project-structure)
 - [Technical notes](#technical-notes)
@@ -123,6 +125,7 @@ This is done **directly on the keyboard's little screen**, no PC required:
 | **Screen Apps** | Toggles for the widgets shown on the keyboard: **Weather**, **APS** (typing speed), **System info** (CPU/RAM), **Video/GIF** and **Slideshow**. |
 | **WiFi** | Scans nearby networks (with **signal strength**) and sends new credentials to the keyboard. |
 | **Settings** | **Theme** (0/1/2), **timezone**, **city** + **weather API key**, and **custom text** shown on the screen. |
+| **Switch feature (serial)** | A button in the connection bar that **advances the screen to the next feature** (GIF, clock, weather, APS, QR/Wi‑Fi…) via a command on the screen's **serial port (COM)**. Handy even to **turn Wi‑Fi on** (just navigate to the QR screen). See [Inside: ESP32‑S3 and serial console](#inside-esp32s3-and-serial-console). |
 
 Robustness details:
 
@@ -215,6 +218,72 @@ Base = `http://<ip>`. All paths are relative to the keyboard's IP.
 
 ---
 
+## Inside: ESP32‑S3 and serial console
+
+Probing the keyboard over its **USB serial port** revealed how the screen works internally — and
+it opened up a **new control channel** that doesn't depend on the network.
+
+### The "little screen" is a detachable ESP32‑S3 module
+
+- The screen is an **independent module** that mates with the keyboard via **12 gold (pogo)
+  pins**: **power + a UART link** between the keyboard and the screen.
+- **Wi‑Fi lives on the SCREEN**, not the keyboard. Its brain is an **ESP32‑S3** (8 MB PSRAM, ES8311
+  audio codec) — it runs the HTTP server, the GIFs, the clock, the widgets, etc. The keyboard
+  itself is just the key matrix, with its own chip.
+- The screen has its **own USB‑C**. Plugged into the PC it shows up as a **serial port**
+  (e.g. `COM6`): `USB\VID_303A&PID_1001` = the ESP32‑S3's built-in **USB‑Serial‑JTAG**.
+
+### Open-source firmware
+
+The screen's firmware is **open source**: <https://github.com/JZ-Skyloong/esp32_screen_module>
+(ESP‑IDF + Arduino + LVGL, **LittleFS** filesystem, project `GK87‑Screen`). Reading that code is
+how we confirmed the details below — including that **media files live at
+`/littlefs/<number>.mpeg`** (the "numeric name").
+
+### The serial console is also a remote control for the screen
+
+The serial port (115200 8N1) streams the **ESP‑IDF logs** live (great for watching the screen
+connect and see which IP it got). But it's **also an input channel**: the firmware (the
+`debug_USB_UART` task) maps **one character → one UI key** — the same commands the keyboard sends
+over the 12 pins:
+
+| Character sent | Action on the screen |
+|---|---|
+| `` ` `` (backtick) | **switch app/feature** (GIF → clock → weather → APS → QR/Wi‑Fi → …) |
+| `/` | enter/leave **Settings mode** |
+| `w` `a` `s` `d` | arrows ↑ ← ↓ → |
+| `Enter` | confirm / click |
+
+> ⚠️ **Read/control only — we never flash anything.** Opening the port **may reboot** the screen
+> (USB‑Serial‑JTAG behavior), but it's harmless (just a reboot).
+
+To **only monitor** the logs: `reverse/serial-listen.ps1` (read-only; writes to
+`reverse/com6.log`). Usage: `pwsh -File reverse\serial-listen.ps1`.
+
+### Switch the screen feature over serial
+
+The console has a **`↻ Switch feature`** button (in the connection bar, next to a **COM port**
+field). Each click sends **one `` ` ``** over serial and the screen **advances to the next
+feature**. This lets you navigate between screens — including reaching the **QR screen**, which is
+what **turns the screen's Wi‑Fi on**.
+
+Since the **browser can't access COM ports**, `server.py` is the one talking to the serial port
+(via `serial-ctl.ps1`, using .NET's `System.IO.Ports` — zero install). Endpoints:
+
+| Method | Endpoint | Function |
+|---|---|---|
+| `GET` | `/api/serial/ports` | lists available COM ports |
+| `POST` | `/api/serial/switch` | sends **one `` ` ``** (switch feature); replies `{ok, info}` with the current app (e.g. `GIF`, `app 2`) |
+| `POST` | `/api/serial/force` | sends `` ` `` + `/` and reads the log to extract the **IP** the screen got on the LAN |
+| `POST` | `/api/serial/exit` | sends `/` (leaves Settings mode, no reboot) |
+
+> 📌 **Requires the SCREEN's USB‑C plugged into this PC.** The `COMx` port only exists while the
+> screen is connected to the PC over USB — if only the **keyboard** is plugged in, the screen's COM
+> **won't appear** (they're separate USB devices). The button only shows up when `server.py`
+> answers at `/api/serial/ports`. The chosen port is saved in `localStorage`.
+
+---
+
 ## How video conversion works
 
 Just like the factory UI: the video is transcoded **in the browser** with **ffmpeg.wasm** to
@@ -291,7 +360,8 @@ When the frontend detects the local server, it routes **all** device calls throu
 ```
 skyloong/
 ├── skyloong-ui.html      ← the console (the main page)
-├── server.py             ← local server + SQLite thumbnail API (stdlib)
+├── server.py             ← local server + SQLite thumbnail API + serial (stdlib)
+├── serial-ctl.ps1        ← controls the screen over serial (COM), used by server.py
 ├── serve.bat             ← starts server.py and opens the browser (recommended)
 ├── thumbnails.sqlite     ← database generated at runtime (git-ignored)
 ├── README.md             ← Portuguese docs
@@ -301,7 +371,8 @@ skyloong/
     ├── index.pretty.js   ← same bundle, formatted (readable)
     ├── index.css         ← original CSS
     ├── ffmpeg.js         ← keyboard's @ffmpeg/ffmpeg ESM wrapper
-    └── dev-worker.js     ← ffmpeg worker served by the keyboard
+    ├── dev-worker.js     ← ffmpeg worker served by the keyboard
+    └── serial-listen.ps1 ← read-only monitor for the screen's serial console
 ```
 
 ---

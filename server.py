@@ -24,6 +24,9 @@ import http.server
 import sqlite3
 import json
 import os
+import re
+import shutil
+import subprocess
 import threading
 import urllib.parse
 import urllib.request
@@ -32,6 +35,41 @@ import sys
 
 ROOT = os.path.dirname(os.path.abspath(__file__))
 DB_PATH = os.path.join(ROOT, "thumbnails.sqlite")
+SERIAL_PS1 = os.path.join(ROOT, "serial-ctl.ps1")
+_PORT_RE = re.compile(r"^COM\d{1,3}$", re.IGNORECASE)
+
+
+def _powershell():
+    """pwsh (PowerShell 7+) de preferencia; cai pro powershell.exe do Windows."""
+    return shutil.which("pwsh") or shutil.which("powershell") or "powershell"
+
+
+def serial_ctl(action, port="COM6", timeout=30):
+    """Invoca serial-ctl.ps1 e devolve o dict do JSON que ele imprime no stdout.
+
+    Mantem o server.py em stdlib pura: a parte serial fica no PowerShell/.NET
+    (System.IO.Ports), que ja provamos funcionar com a telinha (USB-Serial-JTAG).
+    NUNCA flasha nada — so envia teclas / le log.
+    """
+    if action not in ("ports", "force", "exit", "switch"):
+        return {"ok": False, "error": "acao invalida"}
+    if action != "ports" and not _PORT_RE.match(port or ""):
+        return {"ok": False, "error": "porta invalida (esperado COMn)"}
+    cmd = [_powershell(), "-NoProfile", "-ExecutionPolicy", "Bypass",
+           "-File", SERIAL_PS1, "-Action", action]
+    if action != "ports":
+        cmd += ["-Port", port]
+    try:
+        p = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout)
+    except FileNotFoundError:
+        return {"ok": False, "error": "PowerShell nao encontrado"}
+    except subprocess.TimeoutExpired:
+        return {"ok": False, "error": "timeout no serial-ctl"}
+    out = (p.stdout or "").strip()
+    try:
+        return json.loads(out) if out else {"ok": False, "error": "sem saida", "stderr": (p.stderr or "")[:300]}
+    except Exception:
+        return {"ok": False, "error": "saida nao-JSON", "raw": out[:300], "stderr": (p.stderr or "")[:300]}
 # porta: argumento na linha de comando tem prioridade (ex.: python server.py 8011), depois env PORT, senao 8000
 PORT = int(sys.argv[1]) if len(sys.argv) > 1 and sys.argv[1].isdigit() else int(os.environ.get("PORT", "8000"))
 _LOCK = threading.Lock()
@@ -143,6 +181,8 @@ class Handler(http.server.SimpleHTTPRequestHandler):
         path = urllib.parse.urlparse(self.path).path
         if path == "/api/health":
             return self._json({"ok": True})
+        if path == "/api/serial/ports":
+            return self._json(serial_ctl("ports"))
         if path == "/api/thumbs":
             rows = db_run(lambda c: c.execute("SELECT * FROM thumbs").fetchall())
             out = {}
@@ -192,8 +232,13 @@ class Handler(http.server.SimpleHTTPRequestHandler):
     def do_POST(self):
         if self.path.startswith("/dev/"):
             return self._proxy()
-        if urllib.parse.urlparse(self.path).path == "/api/thumb":
+        path = urllib.parse.urlparse(self.path).path
+        if path == "/api/thumb":
             return self._upsert()
+        if path in ("/api/serial/force", "/api/serial/exit", "/api/serial/switch"):
+            port = (self._read_json().get("port") or "COM6").strip()
+            action = path.rsplit("/", 1)[1]
+            return self._json(serial_ctl(action, port))
         return self._json({"error": "nao encontrado"}, 404)
 
     def do_DELETE(self):
