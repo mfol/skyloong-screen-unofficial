@@ -51,7 +51,7 @@ def serial_ctl(action, port="COM6", timeout=30):
     (System.IO.Ports), que ja provamos funcionar com a telinha (USB-Serial-JTAG).
     NUNCA flasha nada — so envia teclas / le log.
     """
-    if action not in ("ports", "force", "exit", "switch"):
+    if action not in ("ports", "force", "exit", "switch", "reset"):
         return {"ok": False, "error": "acao invalida"}
     if action != "ports" and not _PORT_RE.match(port or ""):
         return {"ok": False, "error": "porta invalida (esperado COMn)"}
@@ -235,7 +235,7 @@ class Handler(http.server.SimpleHTTPRequestHandler):
         path = urllib.parse.urlparse(self.path).path
         if path == "/api/thumb":
             return self._upsert()
-        if path in ("/api/serial/force", "/api/serial/exit", "/api/serial/switch"):
+        if path in ("/api/serial/force", "/api/serial/exit", "/api/serial/switch", "/api/serial/reset"):
             port = (self._read_json().get("port") or "COM6").strip()
             action = path.rsplit("/", 1)[1]
             return self._json(serial_ctl(action, port))

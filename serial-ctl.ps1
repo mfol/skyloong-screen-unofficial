@@ -19,7 +19,7 @@
 #>
 [CmdletBinding()]
 param(
-    [ValidateSet('ports','force','exit','switch')]
+    [ValidateSet('ports','force','exit','switch','reset','wakegif')]
     [string]$Action = 'ports',
     [string]$Port = 'COM6',
     [string]$Keys = '`/',          # sequencia de teclas p/ 'force' (crase = troca app/acorda; / = modo Config)
@@ -65,6 +65,30 @@ try {
             $sp.Write('/')          # sai do modo Configuracao
             Start-Sleep -Milliseconds 300
             Out-Json @{ ok = $true; action = 'exit' }
+            exit 0
+        }
+
+        if ($Action -eq 'reset') {
+            # HardReset estilo esptool: pulsa RTS (=> EN baixo => reset do chip), depois solta
+            # (boot normal). DTR fica false (GPIO0 alto) pra NAO cair em modo download.
+            # Usado pelo "keep-awake": destacada no USB, a tela dorme em 10 min; o reset
+            # reinicia o contador (protocol_init zera o timer). Reset = reboot a quente, inofensivo.
+            $sp.RtsEnable = $true
+            Start-Sleep -Milliseconds 200
+            $sp.RtsEnable = $false
+            # best-effort: tentar ver o banner de boot (pode falhar: o USB re-enumera no reset)
+            $booted = $false
+            try {
+                $sb = New-Object System.Text.StringBuilder
+                $end = (Get-Date).AddSeconds(2.5)
+                while ((Get-Date) -lt $end) {
+                    try { $d = $sp.ReadExisting() } catch { $d = '' }
+                    if ($d) { [void]$sb.Append($d) }
+                    if ($sb.ToString() -match 'ESP-ROM|rst:0x|cpu_start') { $booted = $true; break }
+                    Start-Sleep -Milliseconds 80
+                }
+            } catch {}
+            Out-Json @{ ok = $true; action = 'reset'; booted = $booted }
             exit 0
         }
 

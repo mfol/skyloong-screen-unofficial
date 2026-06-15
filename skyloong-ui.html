@@ -176,6 +176,9 @@
           <input id="serialPort" list="serialPorts" placeholder="COM6" title="Porta COM da tela (USB-C da tela plugada neste PC)." style="width:62px">
           <datalist id="serialPorts"></datalist>
           <button class="btn sm ghost" id="switchFeatBtn" title="Manda um comando pela serial que avança a tela pra próxima funcionalidade: GIF → relógio → clima → APS → QR/WiFi → … Cada clique = próxima. Requer a USB-C da tela neste PC e o serve.bat.">↻ Trocar feature</button>
+          <label title="Mantém a tela acordada: a cada ~9 min reinicia a tela pela serial (reset), porque destacada no USB ela dorme sozinha em 10 min. Cada ciclo reinicia a tela (animação de boot + reconecta o WiFi) — é um reboot a quente, inofensivo. Ative logo após plugar a USB-C." style="display:inline-flex;align-items:center;gap:4px;font-size:12px;color:var(--mut);cursor:pointer;user-select:none">
+            <input type="checkbox" id="keepAwake" style="width:auto;margin:0;accent-color:var(--acc)"> keep‑awake
+          </label>
         </span>
       </div>
     </div>
@@ -272,6 +275,19 @@ async function switchFeature(){
   }catch(e){ toast('Serial: '+e.message+' (USB-C da tela neste PC?)','err',5000); }
   finally{ btn.disabled=false; btn.innerHTML=old; }
 }
+
+/* keep‑awake: destacada no USB a tela dorme em 10 min (firmware) e a COM some — então a
+   cada ~9 min damos um reset (pulso de RTS) que reinicia o contador de sono. É um reboot. */
+let KEEP_AWAKE = localStorage.getItem('sky_keepawake')==='1';
+let keepAwakeTimer = null;
+const KEEPAWAKE_MS = 9*60*1000;   // 9 min (< 10 min do firmware)
+async function keepAwakeTick(){
+  if(!serialReady()) return;
+  try{ const r=await serialPost('reset'); if(r&&r.ok) toast('Keep‑awake: tela reiniciada','',1800); }
+  catch(e){ /* porta pode ter sumido (dormiu/desplugou) — segue tentando no próximo ciclo */ }
+}
+function startKeepAwake(){ stopKeepAwake(); keepAwakeTimer=setInterval(keepAwakeTick, KEEPAWAKE_MS); }
+function stopKeepAwake(){ if(keepAwakeTimer){ clearInterval(keepAwakeTimer); keepAwakeTimer=null; } }
 
 /* ---------- toast ---------- */
 function toast(msg, type='', ms=2600){
@@ -927,16 +943,22 @@ document.getElementById('host').addEventListener('keydown',e=>{if(e.key==='Enter
 
 /* botão "Trocar feature": só aparece se o server.py responder /api/serial/ports */
 (function setupSerialUI(){
-  const wrap=document.getElementById('serialWrap'), pin=document.getElementById('serialPort'), btn=document.getElementById('switchFeatBtn');
+  const wrap=document.getElementById('serialWrap'), pin=document.getElementById('serialPort'),
+        btn=document.getElementById('switchFeatBtn'), ka=document.getElementById('keepAwake');
   if(!wrap || !THUMB_BASE) return;                 // file:// → sem serial
   pin.value=SERIAL_PORT;
   pin.onchange=()=>{ SERIAL_PORT=(pin.value.trim()||'COM6').toUpperCase(); localStorage.setItem('sky_serial_port', SERIAL_PORT); pin.value=SERIAL_PORT; };
   btn.onclick=switchFeature;
+  ka.checked=KEEP_AWAKE;
+  ka.onchange=()=>{ KEEP_AWAKE=ka.checked; localStorage.setItem('sky_keepawake', KEEP_AWAKE?'1':'0');
+    if(KEEP_AWAKE){ startKeepAwake(); toast('Keep‑awake ligado — reinicia a tela a cada ~9 min','ok',4000); }
+    else { stopKeepAwake(); toast('Keep‑awake desligado'); } };
   fetch(THUMB_BASE+'/api/serial/ports',{cache:'no-store'})
     .then(r=> r.ok ? r.json() : Promise.reject())
     .then(d=>{ if(!d||!d.ok) throw 0;
       wrap.style.display='inline-flex';
       document.getElementById('serialPorts').innerHTML=(d.ports||[]).map(p=>`<option value="${esc(p)}">`).join('');
+      if(KEEP_AWAKE) startKeepAwake();
     }).catch(()=>{ wrap.style.display='none'; });
 })();
 buildNav();
