@@ -23,6 +23,7 @@ no build, no server, no dependencies to install.
 - [Device API (reverse-engineered)](#device-api-reverse-engineered)
 - [Inside: ESP32‑S3 and serial console](#inside-esp32s3-and-serial-console)
   - [Switch the screen feature over serial](#switch-the-screen-feature-over-serial)
+  - [Auto‑sleep and keep‑awake](#auto-sleep-and-keep-awake)
 - [How video conversion works](#how-video-conversion-works)
 - [Project structure](#project-structure)
 - [Technical notes](#technical-notes)
@@ -276,11 +277,30 @@ Since the **browser can't access COM ports**, `server.py` is the one talking to 
 | `POST` | `/api/serial/switch` | sends **one `` ` ``** (switch feature); replies `{ok, info}` with the current app (e.g. `GIF`, `app 2`) |
 | `POST` | `/api/serial/force` | sends `` ` `` + `/` and reads the log to extract the **IP** the screen got on the LAN |
 | `POST` | `/api/serial/exit` | sends `/` (leaves Settings mode, no reboot) |
+| `POST` | `/api/serial/reset` | **resets** the screen (RTS pulse = warm reboot); used by keep‑awake |
+| `POST` | `/api/serial/wakegif` | **reset + navigate to GIF** (the screen comes back showing the GIF after the reboot) |
 
 > 📌 **Requires the SCREEN's USB‑C plugged into this PC.** The `COMx` port only exists while the
 > screen is connected to the PC over USB — if only the **keyboard** is plugged in, the screen's COM
 > **won't appear** (they're separate USB devices). The button only shows up when `server.py`
 > answers at `/api/serial/ports`. The chosen port is saved in `localStorage`.
+
+### Auto‑sleep and keep‑awake
+
+Per the firmware (`task_powerOFF`), the screen enters **deep sleep after ~10 min** without the
+keyboard "talking" to it over the 12 pins. Since wake is tied to the **keyboard's UART pin**,
+**with the screen detached (USB only) it sleeps in 10 min — and the `COMx` port disappears** (deep
+sleep powers down the USB peripheral). Keys we send over USB do **not** reset that countdown.
+
+For prolonged use with the screen on USB, the console has a **`keep‑awake`** checkbox: every
+**~9 min** it **resets** the screen over serial (RTS pulse = warm reboot), which restarts the sleep
+countdown. Each reboot **comes back showing the GIF** (the `wakegif` action = reset + automatic
+navigation to the GIF app).
+
+> ⚠️ It's a **reboot** (boot animation + Wi‑Fi reconnect each cycle) — but it **doesn't wear out**
+> the ESP32: a reset is electrically harmless and boot is **read-only on flash**. And it **can't
+> wake it once asleep** (no COM port = nothing to reset) — so **enable keep‑awake right after
+> plugging the USB‑C**, while the screen is still awake.
 
 ---
 

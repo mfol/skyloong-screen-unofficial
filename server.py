@@ -51,7 +51,7 @@ def serial_ctl(action, port="COM6", timeout=30):
     (System.IO.Ports), que ja provamos funcionar com a telinha (USB-Serial-JTAG).
     NUNCA flasha nada — so envia teclas / le log.
     """
-    if action not in ("ports", "force", "exit", "switch", "reset"):
+    if action not in ("ports", "force", "exit", "switch", "reset", "wakegif"):
         return {"ok": False, "error": "acao invalida"}
     if action != "ports" and not _PORT_RE.match(port or ""):
         return {"ok": False, "error": "porta invalida (esperado COMn)"}
@@ -235,10 +235,13 @@ class Handler(http.server.SimpleHTTPRequestHandler):
         path = urllib.parse.urlparse(self.path).path
         if path == "/api/thumb":
             return self._upsert()
-        if path in ("/api/serial/force", "/api/serial/exit", "/api/serial/switch", "/api/serial/reset"):
+        if path in ("/api/serial/force", "/api/serial/exit", "/api/serial/switch",
+                    "/api/serial/reset", "/api/serial/wakegif"):
             port = (self._read_json().get("port") or "COM6").strip()
             action = path.rsplit("/", 1)[1]
-            return self._json(serial_ctl(action, port))
+            # wakegif faz reset + navegacao (boot ~7s + varias trocas) → precisa de mais tempo
+            timeout = 60 if action == "wakegif" else 30
+            return self._json(serial_ctl(action, port, timeout=timeout))
         return self._json({"error": "nao encontrado"}, 404)
 
     def do_DELETE(self):

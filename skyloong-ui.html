@@ -283,7 +283,8 @@ let keepAwakeTimer = null;
 const KEEPAWAKE_MS = 9*60*1000;   // 9 min (< 10 min do firmware)
 async function keepAwakeTick(){
   if(!serialReady()) return;
-  try{ const r=await serialPost('reset'); if(r&&r.ok) toast('Keep‑awake: tela reiniciada','',1800); }
+  // wakegif = reset + navega até o GIF, pra a tela voltar sempre mostrando o GIF.
+  try{ const r=await serialPost('wakegif'); if(r&&r.ok) toast('Keep‑awake: tela reiniciada'+(r.onGif?' (na GIF)':(r.info?(' ('+r.info+')'):'')),'',2400); }
   catch(e){ /* porta pode ter sumido (dormiu/desplugou) — segue tentando no próximo ciclo */ }
 }
 function startKeepAwake(){ stopKeepAwake(); keepAwakeTimer=setInterval(keepAwakeTick, KEEPAWAKE_MS); }

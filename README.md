@@ -23,6 +23,7 @@ dispositivo — sem build, sem servidor, sem dependências para instalar.
 - [API do dispositivo (engenharia reversa)](#api-do-dispositivo-engenharia-reversa)
 - [Por dentro: ESP32‑S3 e console serial](#por-dentro-esp32s3-e-console-serial)
   - [Trocar feature da tela pela serial](#trocar-feature-da-tela-pela-serial)
+  - [Auto‑sleep e keep‑awake](#auto-sleep-e-keep-awake)
 - [Como a conversão de vídeo funciona](#como-a-conversão-de-vídeo-funciona)
 - [Estrutura do projeto](#estrutura-do-projeto)
 - [Notas técnicas](#notas-técnicas)
@@ -275,11 +276,30 @@ Como o **navegador não acessa porta COM**, quem fala com a serial é o **`serve
 | `POST` | `/api/serial/switch` | manda **um `` ` ``** (troca de feature); responde `{ok, info}` com o app atual (ex.: `GIF`, `app 2`) |
 | `POST` | `/api/serial/force` | manda `` ` `` + `/` e lê o log tentando extrair o **IP** que a tela pegou na LAN |
 | `POST` | `/api/serial/exit` | manda `/` (sai do modo Configuração, sem reboot) |
+| `POST` | `/api/serial/reset` | dá um **reset** na tela (pulso de RTS = reboot a quente); usado pelo keep‑awake |
+| `POST` | `/api/serial/wakegif` | **reset + navega até o GIF** (a tela volta mostrando o GIF após o reboot) |
 
 > 📌 **Requer a USB‑C da TELA plugada neste PC.** A porta `COMx` só existe quando a tela está
 > ligada ao PC por USB — se só o **teclado** estiver conectado, a COM da tela **não aparece**
 > (são dispositivos USB separados). O botão só é exibido quando o `server.py` responde em
 > `/api/serial/ports`. A porta escolhida fica salva no `localStorage`.
+
+### Auto‑sleep e keep‑awake
+
+Pelo firmware (`task_powerOFF`), a tela entra em **deep sleep após ~10 min** sem o teclado
+"conversar" com ela pelos 12 pinos. Como o wake é amarrado ao **pino da UART do teclado**,
+**com a tela destacada (só no USB) ela dorme em 10 min — e a porta `COMx` desaparece** (o deep
+sleep desliga o periférico USB). As teclas que mandamos pela USB **não** reiniciam esse contador.
+
+Para uso prolongado com a tela no USB, o console tem um checkbox **`keep‑awake`**: a cada
+**~9 min** ele dá um **reset** na tela pela serial (pulso de RTS = reboot a quente), o que
+reinicia o contador de sono. Cada reboot **volta mostrando o GIF** (ação `wakegif` = reset +
+navegação automática até o app de GIF).
+
+> ⚠️ É um **reboot** (anima boot + reconecta o WiFi a cada ciclo) — mas **não desgasta** o
+> ESP32: resetar é eletricamente inofensivo e o boot é **só leitura na flash**. E **não acorda
+> se já dormiu** (sem porta COM, não há o que resetar) — então **ligue o keep‑awake logo após
+> plugar a USB‑C**, com a tela ainda acordada.
 
 ---
 

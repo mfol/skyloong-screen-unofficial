@@ -92,6 +92,56 @@ try {
             exit 0
         }
 
+        if ($Action -eq 'wakegif') {
+            # reset (pulso RTS) e DEPOIS navega ate o app de GIF, garantindo que apos o
+            # reboot a tela volte mostrando o GIF (e nao relogio/clima/etc).
+            $sp.RtsEnable = $true
+            Start-Sleep -Milliseconds 200
+            $sp.RtsEnable = $false
+            if ($sp.IsOpen) { $sp.Close() }
+            $sp.Dispose(); $sp = $null
+            Start-Sleep -Seconds 7          # boot + re-enumeracao do USB
+
+            # reabre (a porta some/volta durante o reset)
+            for ($i = 0; $i -lt 12 -and -not $sp; $i++) {
+                try { $sp = Open-Port $Port } catch { $sp = $null; Start-Sleep -Milliseconds 500 }
+            }
+            if (-not $sp) { Out-Json @{ ok = $false; action = 'wakegif'; error = 'porta nao voltou apos reset' }; exit 1 }
+            Start-Sleep -Milliseconds 600
+            [void]$sp.ReadExisting()
+
+            # helper de leitura (le por N ms, devolve texto limpo)
+            $readFor = {
+                param($ms)
+                $b = New-Object System.Text.StringBuilder
+                $stop = (Get-Date).AddMilliseconds($ms)
+                while ((Get-Date) -lt $stop) {
+                    try { $x = $sp.ReadExisting() } catch { $x = '' }
+                    if ($x) { [void]$b.Append($x) }
+                    Start-Sleep -Milliseconds 80
+                }
+                return (Strip-Ansi $b.ToString())
+            }
+
+            $onGif = $false; $info = $null
+            # ja esta no GIF? (o app de GIF loga "Rolling"/"Playing" periodicamente)
+            $pre = & $readFor 3200
+            if ($pre -match 'GIF: (Playing|Rolling)') { $onGif = $true; $info = 'GIF' }
+
+            # senao, troca de feature ate cair no GIF (lista pequena de apps)
+            if (-not $onGif) {
+                for ($k = 0; $k -lt 7; $k++) {
+                    $sp.Write([string][char]96)     # crase = proxima feature
+                    $clean = & $readFor 1500
+                    if ($clean -match 'GIF: (Playing|Rolling)') { $onGif = $true; $info = 'GIF'; break }
+                    $mm = [regex]::Matches($clean, 'Switch to (\d+)')
+                    if ($mm.Count -gt 0) { $info = 'app ' + $mm[$mm.Count - 1].Groups[1].Value }
+                }
+            }
+            Out-Json @{ ok = $true; action = 'wakegif'; onGif = $onGif; info = $info }
+            exit 0
+        }
+
         if ($Action -eq 'switch') {
             # crase = troca de app/feature na tela (GIF, relogio, clima, APS, QR/WiFi...)
             $sp.Write([string][char]96)
